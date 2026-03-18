@@ -1,5 +1,6 @@
 import { query, withTransaction } from '../config/database';
 import { insertAuditLog } from './audit.service';
+import { requestTimestamp } from './tsa.service';
 
 export async function listAcademicYears(tenantId: string, userId: string, userRole: string, schoolId?: string) {
   return withTransaction(async (client) => {
@@ -93,6 +94,25 @@ export async function initiateYearClose(
         JSON.stringify(schoolResult.rows[0] || {}),
       ]
     );
+
+    let externalAnchorRef: string | null = null;
+    let externalAnchorTimestamp: Date | null = null;
+    try {
+      const tsaResult = await requestTimestamp(merkleResult.root_hash);
+      externalAnchorRef = tsaResult.anchorRef;
+      externalAnchorTimestamp = tsaResult.timestamp;
+      await client.query(
+        `UPDATE year_snapshots SET external_anchor_ref = $1, external_anchor_timestamp = $2, tsa_response = $3 WHERE id = $4`,
+        [externalAnchorRef, externalAnchorTimestamp, tsaResult.timestampToken, snapshotResult.rows[0].id]
+      );
+    } catch (err) {
+      console.warn('[AcademicYear] TSA request failed, storing TSA_UNAVAILABLE:', err);
+      externalAnchorRef = 'TSA_UNAVAILABLE';
+      await client.query(
+        `UPDATE year_snapshots SET external_anchor_ref = $1 WHERE id = $2`,
+        [externalAnchorRef, snapshotResult.rows[0].id]
+      );
+    }
 
     await client.query(
       `UPDATE academic_years SET status = 'LOCKED', year_snapshot_id = $1, locked_by = $2 WHERE id = $3`,
