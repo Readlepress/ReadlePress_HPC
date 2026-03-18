@@ -51,21 +51,17 @@ class GpsTimestampService {
   Future<TimestampResult?> _tryGpsFix() async {
     try {
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
-      if (position.timestamp != null) {
-        final timestamp = position.timestamp!;
-        await _storeGpsOffset(timestamp);
-        return TimestampResult(
-          timestamp: timestamp,
-          source: TimestampSource.gpsFix,
-          confidence: TimestampConfidence.high,
-        );
-      }
+      final timestamp = position.timestamp;
+      await _storeGpsOffset(timestamp);
+      return TimestampResult(
+        timestamp: timestamp,
+        source: TimestampSource.gpsFix,
+        confidence: TimestampConfidence.high,
+      );
     } catch (_) {
       // GPS unavailable
     }
