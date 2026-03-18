@@ -26,7 +26,7 @@ CREATE TABLE capture_sessions (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     teacher_id UUID NOT NULL REFERENCES teacher_profiles(id),
     class_id UUID NOT NULL REFERENCES classes(id),
-    device_id TEXT REFERENCES offline_device_registry(device_id),
+    device_id TEXT,
     session_type TEXT NOT NULL DEFAULT 'OBSERVATION'
         CHECK (session_type IN ('OBSERVATION', 'ASSESSMENT', 'GROUP_ACTIVITY', 'FIELD_TRIP')),
     activity_description TEXT,

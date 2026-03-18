@@ -23,15 +23,22 @@ async function seed() {
 
     // Create admin user
     const passwordHash = await bcrypt.hash('admin123', 12);
-    const adminResult = await client.query(
-      `INSERT INTO users (tenant_id, email, phone, password_hash, display_name, status)
-       VALUES ($1, 'admin@readlepress.dev', '+919999999999', $2, 'Admin User', 'ACTIVE')
-       ON CONFLICT ON CONSTRAINT users_email_or_phone DO NOTHING
-       RETURNING id`,
-      [tenantId, passwordHash]
+    // Check if admin user already exists
+    const existingAdmin = await client.query(
+      `SELECT id FROM users WHERE email = 'admin@readlepress.dev' AND tenant_id = $1`,
+      [tenantId]
     );
 
-    if (adminResult.rows.length > 0) {
+    const adminResult = existingAdmin.rows.length > 0
+      ? existingAdmin
+      : await client.query(
+          `INSERT INTO users (tenant_id, email, phone, password_hash, display_name, status)
+           VALUES ($1, 'admin@readlepress.dev', '+919999999999', $2, 'Admin User', 'ACTIVE')
+           RETURNING id`,
+          [tenantId, passwordHash]
+        );
+
+    {
       const adminId = adminResult.rows[0].id;
 
       // Seed permissions

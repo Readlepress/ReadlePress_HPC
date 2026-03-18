@@ -7,6 +7,6 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  setupFilesAfterSetup: [],
+  setupFilesAfterSetup: undefined,
   testTimeout: 30000,
 };

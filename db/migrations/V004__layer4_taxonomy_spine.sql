@@ -61,16 +61,16 @@ CREATE TABLE competencies (
 CREATE OR REPLACE FUNCTION protect_competency_uid()
 RETURNS TRIGGER AS $$
 DECLARE
-    current_role TEXT;
+    v_role TEXT;
 BEGIN
     IF OLD.uid != NEW.uid THEN
         RAISE EXCEPTION 'Competency UIDs are immutable and cannot be changed'
             USING ERRCODE = 'check_violation';
     END IF;
 
-    current_role := current_setting('app.user_role', TRUE);
-    IF current_role IS NOT NULL AND current_role != 'PLATFORM_ADMIN' THEN
-        RAISE EXCEPTION 'Only PLATFORM_ADMIN can update competency records. Current role: %', current_role
+    v_role := current_setting('app.user_role', TRUE);
+    IF v_role IS NOT NULL AND v_role != 'PLATFORM_ADMIN' THEN
+        RAISE EXCEPTION 'Only PLATFORM_ADMIN can update competency records. Current role: %', v_role
             USING ERRCODE = 'insufficient_privilege';
     END IF;
 

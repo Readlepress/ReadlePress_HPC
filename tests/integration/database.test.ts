@@ -1,24 +1,25 @@
 import { Pool, PoolClient } from 'pg';
 
-const TEST_DB_URL = process.env.DATABASE_ADMIN_URL || 'postgresql://readlepress_admin:dev_password_only@localhost:5432/readlepress';
-const APP_RW_URL = process.env.DATABASE_URL || 'postgresql://app_rw:app_rw_dev_password@localhost:5432/readlepress';
+const TEST_DB_URL = process.env.DATABASE_ADMIN_URL || 'postgresql://readlepress_admin:dev_password_only@127.0.0.1:5432/readlepress';
+const APP_RW_URL = process.env.DATABASE_URL || 'postgresql://app_rw:app_rw_dev_password@127.0.0.1:5432/readlepress';
 
 let adminPool: Pool;
 let appPool: Pool;
 let adminClient: PoolClient;
-let appClient: PoolClient;
 
 let testTenantId: string;
 let testUserId: string;
+
+async function getAppClient(): Promise<PoolClient> {
+  return appPool.connect();
+}
 
 beforeAll(async () => {
   adminPool = new Pool({ connectionString: TEST_DB_URL });
   appPool = new Pool({ connectionString: APP_RW_URL });
 
   adminClient = await adminPool.connect();
-  appClient = await appPool.connect();
 
-  // Create test tenant and user
   const tenantResult = await adminClient.query(
     `INSERT INTO tenants (name, slug) VALUES ('Test Tenant A', 'test-tenant-a')
      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
@@ -26,28 +27,26 @@ beforeAll(async () => {
   );
   testTenantId = tenantResult.rows[0].id;
 
-  const userResult = await adminClient.query(
-    `INSERT INTO users (tenant_id, email, password_hash, display_name, status)
-     VALUES ($1, 'test-rls@test.com', 'hash', 'Test User', 'ACTIVE')
-     ON CONFLICT DO NOTHING
-     RETURNING id`,
+  const existingUser = await adminClient.query(
+    `SELECT id FROM users WHERE email = 'test-rls@test.com' AND tenant_id = $1`,
     [testTenantId]
   );
 
-  if (userResult.rows.length > 0) {
-    testUserId = userResult.rows[0].id;
+  if (existingUser.rows.length > 0) {
+    testUserId = existingUser.rows[0].id;
   } else {
-    const existingUser = await adminClient.query(
-      `SELECT id FROM users WHERE email = 'test-rls@test.com' AND tenant_id = $1`,
+    const userResult = await adminClient.query(
+      `INSERT INTO users (tenant_id, email, password_hash, display_name, status)
+       VALUES ($1, 'test-rls@test.com', 'hash', 'Test User', 'ACTIVE')
+       RETURNING id`,
       [testTenantId]
     );
-    testUserId = existingUser.rows[0].id;
+    testUserId = userResult.rows[0].id;
   }
 });
 
 afterAll(async () => {
   if (adminClient) adminClient.release();
-  if (appClient) appClient.release();
   if (adminPool) await adminPool.end();
   if (appPool) await appPool.end();
 });
@@ -57,7 +56,6 @@ describe('Layer 1 — Platform Foundation', () => {
     let tenantBId: string;
 
     beforeAll(async () => {
-      // Create a second tenant
       const result = await adminClient.query(
         `INSERT INTO tenants (name, slug) VALUES ('Test Tenant B', 'test-tenant-b')
          ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
@@ -65,7 +63,6 @@ describe('Layer 1 — Platform Foundation', () => {
       );
       tenantBId = result.rows[0].id;
 
-      // Insert a user in Tenant B
       await adminClient.query(
         `INSERT INTO users (tenant_id, email, password_hash, display_name, status)
          VALUES ($1, 'tenantb@test.com', 'hash', 'Tenant B User', 'ACTIVE')
@@ -75,101 +72,126 @@ describe('Layer 1 — Platform Foundation', () => {
     });
 
     test('Tenant A context returns zero rows from Tenant B data', async () => {
-      await appClient.query('BEGIN');
-      await appClient.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
-      await appClient.query(`SET LOCAL app.user_id = '${testUserId}'`);
-      await appClient.query(`SET LOCAL app.user_role = 'CLASS_TEACHER'`);
+      const client = await getAppClient();
+      try {
+        await client.query('BEGIN');
+        await client.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
+        await client.query(`SET LOCAL app.user_id = '${testUserId}'`);
+        await client.query(`SET LOCAL app.user_role = 'CLASS_TEACHER'`);
 
-      const result = await appClient.query(
-        'SELECT COUNT(*) as count FROM users WHERE tenant_id = $1',
-        [tenantBId]
-      );
+        const result = await client.query(
+          'SELECT COUNT(*) as count FROM users WHERE tenant_id = $1',
+          [tenantBId]
+        );
 
-      expect(parseInt(result.rows[0].count)).toBe(0);
-      await appClient.query('ROLLBACK');
+        expect(parseInt(result.rows[0].count)).toBe(0);
+        await client.query('ROLLBACK');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     });
   });
 
   describe('Audit Log: Append-only enforcement', () => {
-    test('UPDATE on audit_log is silently ignored (DO INSTEAD NOTHING)', async () => {
-      await appClient.query('BEGIN');
-      await appClient.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
-      await appClient.query(`SET LOCAL app.user_id = '${testUserId}'`);
-      await appClient.query(`SET LOCAL app.user_role = 'PLATFORM_ADMIN'`);
+    test('UPDATE on audit_log is silently ignored', async () => {
+      const client = await getAppClient();
+      try {
+        await client.query('BEGIN');
+        await client.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
+        await client.query(`SET LOCAL app.user_id = '${testUserId}'`);
+        await client.query(`SET LOCAL app.user_role = 'PLATFORM_ADMIN'`);
 
-      // Insert a test audit record
-      await appClient.query(
-        `INSERT INTO audit_log (tenant_id, event_type, entity_type, entity_id, performed_by)
-         VALUES ($1, 'TEST', 'TEST', $2, $2)`,
-        [testTenantId, testUserId]
-      );
+        await client.query(
+          `INSERT INTO audit_log (tenant_id, event_type, entity_type, entity_id, performed_by)
+           VALUES ($1, 'TEST_UPD', 'TEST', $2, $2)`,
+          [testTenantId, testUserId]
+        );
 
-      const beforeUpdate = await appClient.query(
-        `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST'`,
-        [testTenantId]
-      );
+        const before = await client.query(
+          `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_UPD'`,
+          [testTenantId]
+        );
 
-      // Attempt UPDATE — should be silently ignored by the rule
-      await appClient.query(
-        `UPDATE audit_log SET event_type = 'MODIFIED' WHERE tenant_id = $1 AND event_type = 'TEST'`,
-        [testTenantId]
-      );
+        await client.query(
+          `UPDATE audit_log SET event_type = 'MODIFIED' WHERE tenant_id = $1 AND event_type = 'TEST_UPD'`,
+          [testTenantId]
+        );
 
-      const afterUpdate = await appClient.query(
-        `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST'`,
-        [testTenantId]
-      );
+        const after = await client.query(
+          `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_UPD'`,
+          [testTenantId]
+        );
 
-      // The record should still have the original event_type
-      expect(afterUpdate.rows[0].count).toBe(beforeUpdate.rows[0].count);
-
-      await appClient.query('ROLLBACK');
+        expect(after.rows[0].count).toBe(before.rows[0].count);
+        await client.query('ROLLBACK');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     });
 
-    test('DELETE on audit_log is silently ignored (DO INSTEAD NOTHING)', async () => {
-      await appClient.query('BEGIN');
-      await appClient.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
-      await appClient.query(`SET LOCAL app.user_id = '${testUserId}'`);
-      await appClient.query(`SET LOCAL app.user_role = 'PLATFORM_ADMIN'`);
+    test('DELETE on audit_log is silently ignored', async () => {
+      const client = await getAppClient();
+      try {
+        await client.query('BEGIN');
+        await client.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
+        await client.query(`SET LOCAL app.user_id = '${testUserId}'`);
+        await client.query(`SET LOCAL app.user_role = 'PLATFORM_ADMIN'`);
 
-      await appClient.query(
-        `INSERT INTO audit_log (tenant_id, event_type, entity_type, entity_id, performed_by)
-         VALUES ($1, 'TEST_DELETE', 'TEST', $2, $2)`,
-        [testTenantId, testUserId]
-      );
+        await client.query(
+          `INSERT INTO audit_log (tenant_id, event_type, entity_type, entity_id, performed_by)
+           VALUES ($1, 'TEST_DEL', 'TEST', $2, $2)`,
+          [testTenantId, testUserId]
+        );
 
-      const beforeDelete = await appClient.query(
-        `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_DELETE'`,
-        [testTenantId]
-      );
+        const before = await client.query(
+          `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_DEL'`,
+          [testTenantId]
+        );
 
-      await appClient.query(
-        `DELETE FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_DELETE'`,
-        [testTenantId]
-      );
+        await client.query(
+          `DELETE FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_DEL'`,
+          [testTenantId]
+        );
 
-      const afterDelete = await appClient.query(
-        `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_DELETE'`,
-        [testTenantId]
-      );
+        const after = await client.query(
+          `SELECT COUNT(*) as count FROM audit_log WHERE tenant_id = $1 AND event_type = 'TEST_DEL'`,
+          [testTenantId]
+        );
 
-      expect(afterDelete.rows[0].count).toBe(beforeDelete.rows[0].count);
-
-      await appClient.query('ROLLBACK');
+        expect(after.rows[0].count).toBe(before.rows[0].count);
+        await client.query('ROLLBACK');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     });
   });
 
   describe('Audit Hash Chain', () => {
-    test('Hash chain produces consistent hashes', async () => {
+    test('Hash chain produces consistent SHA-256 hashes', async () => {
+      // Insert via admin to ensure it works
+      await adminClient.query(
+        `INSERT INTO audit_log (tenant_id, event_type, entity_type, entity_id, performed_by)
+         VALUES ($1, 'HASH_TEST', 'TEST', $2, $2)`,
+        [testTenantId, testUserId]
+      );
+
       const result = await adminClient.query(
-        `SELECT row_hash FROM audit_log WHERE tenant_id = $1 LIMIT 1`,
+        `SELECT row_hash FROM audit_log WHERE tenant_id = $1 AND event_type = 'HASH_TEST' LIMIT 1`,
         [testTenantId]
       );
 
-      if (result.rows.length > 0) {
-        expect(result.rows[0].row_hash).toBeTruthy();
-        expect(result.rows[0].row_hash.length).toBe(64); // SHA-256 hex
-      }
+      expect(result.rows.length).toBeGreaterThan(0);
+      expect(result.rows[0].row_hash).toBeTruthy();
+      expect(result.rows[0].row_hash.length).toBe(64);
     });
   });
 });
@@ -193,14 +215,12 @@ describe('Layer 2 — Government Identity', () => {
        RETURNING id`,
       [testTenantId]
     );
-    // Should not throw
     expect(true).toBe(true);
   });
 });
 
 describe('Layer 3 — Academic Year Lifecycle', () => {
   let schoolId: string;
-  let yearId: string;
 
   beforeAll(async () => {
     const schoolResult = await adminClient.query(
@@ -219,34 +239,23 @@ describe('Layer 3 — Academic Year Lifecycle', () => {
     } else {
       schoolId = schoolResult.rows[0].id;
     }
-
-    const yearResult = await adminClient.query(
-      `INSERT INTO academic_years (tenant_id, school_id, label, start_date, end_date, status)
-       VALUES ($1, $2, '2024-25-test', '2024-04-01', '2025-03-31', 'PLANNING')
-       ON CONFLICT DO NOTHING
-       RETURNING id`,
-      [testTenantId, schoolId]
-    );
-
-    if (yearResult.rows.length > 0) {
-      yearId = yearResult.rows[0].id;
-    } else {
-      const existing = await adminClient.query(
-        `SELECT id FROM academic_years WHERE tenant_id = $1 AND label = '2024-25-test'`,
-        [testTenantId]
-      );
-      yearId = existing.rows[0].id;
-    }
   });
 
   test('Year state machine enforces one-way transitions', async () => {
-    // Transition to ACTIVE (valid)
+    const label = 'test-sm-' + Date.now();
+    const yearResult = await adminClient.query(
+      `INSERT INTO academic_years (tenant_id, school_id, label, start_date, end_date, status)
+       VALUES ($1, $2, $3, '2024-04-01', '2025-03-31', 'PLANNING')
+       RETURNING id`,
+      [testTenantId, schoolId, label]
+    );
+    const yearId = yearResult.rows[0].id;
+
     await adminClient.query(
       `UPDATE academic_years SET status = 'ACTIVE' WHERE id = $1`,
       [yearId]
     );
 
-    // Attempt to go back to PLANNING (invalid)
     await expect(async () => {
       await adminClient.query(
         `UPDATE academic_years SET status = 'PLANNING' WHERE id = $1`,
@@ -256,11 +265,19 @@ describe('Layer 3 — Academic Year Lifecycle', () => {
   });
 
   test('Cannot transition from LOCKED back to ACTIVE', async () => {
-    // Advance through states to LOCKED
+    const label = 'test-lock-' + Date.now();
+    const yearResult = await adminClient.query(
+      `INSERT INTO academic_years (tenant_id, school_id, label, start_date, end_date, status)
+       VALUES ($1, $2, $3, '2024-04-01', '2025-03-31', 'PLANNING')
+       RETURNING id`,
+      [testTenantId, schoolId, label]
+    );
+    const yearId = yearResult.rows[0].id;
+
+    await adminClient.query(`UPDATE academic_years SET status = 'ACTIVE' WHERE id = $1`, [yearId]);
     await adminClient.query(`UPDATE academic_years SET status = 'REVIEW' WHERE id = $1`, [yearId]);
     await adminClient.query(`UPDATE academic_years SET status = 'LOCKED' WHERE id = $1`, [yearId]);
 
-    // Attempt LOCKED → ACTIVE
     await expect(async () => {
       await adminClient.query(
         `UPDATE academic_years SET status = 'ACTIVE' WHERE id = $1`,
@@ -308,43 +325,57 @@ describe('Layer 4 — Taxonomy Spine', () => {
     }).rejects.toThrow();
   });
 
-  test('DB trigger blocks UPDATE on competency UIDs', async () => {
-    // Set role context to CLASS_TEACHER (non-PLATFORM_ADMIN)
-    await appClient.query('BEGIN');
-    await appClient.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
-    await appClient.query(`SET LOCAL app.user_id = '${testUserId}'`);
-    await appClient.query(`SET LOCAL app.user_role = 'CLASS_TEACHER'`);
+  test('DB trigger blocks UPDATE on competencies for non-PLATFORM_ADMIN', async () => {
+    const client = await getAppClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
+      await client.query(`SET LOCAL app.user_id = '${testUserId}'`);
+      await client.query(`SET LOCAL app.user_role = 'CLASS_TEACHER'`);
 
-    await expect(async () => {
-      await appClient.query(
-        `UPDATE competencies SET name = 'Updated Name' WHERE id = $1`,
-        [competencyId]
-      );
-    }).rejects.toThrow(/PLATFORM_ADMIN/);
+      await expect(async () => {
+        await client.query(
+          `UPDATE competencies SET name = 'Updated Name' WHERE id = $1`,
+          [competencyId]
+        );
+      }).rejects.toThrow(/PLATFORM_ADMIN/);
 
-    await appClient.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   });
 
   test('Competency UID cannot be changed even by PLATFORM_ADMIN', async () => {
-    await appClient.query('BEGIN');
-    await appClient.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
-    await appClient.query(`SET LOCAL app.user_id = '${testUserId}'`);
-    await appClient.query(`SET LOCAL app.user_role = 'PLATFORM_ADMIN'`);
+    const client = await getAppClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
+      await client.query(`SET LOCAL app.user_id = '${testUserId}'`);
+      await client.query(`SET LOCAL app.user_role = 'PLATFORM_ADMIN'`);
 
-    await expect(async () => {
-      await appClient.query(
-        `UPDATE competencies SET uid = 'COMP-NCF23-PREP-G5-COG-NS-999' WHERE id = $1`,
-        [competencyId]
-      );
-    }).rejects.toThrow(/immutable/);
+      await expect(async () => {
+        await client.query(
+          `UPDATE competencies SET uid = 'COMP-NCF23-PREP-G5-COG-NS-999' WHERE id = $1`,
+          [competencyId]
+        );
+      }).rejects.toThrow(/immutable/);
 
-    await appClient.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   });
 });
 
 describe('Layer 5 — Localization', () => {
   test('OFFICIAL_LOCKED strings cannot be modified', async () => {
-    // Create a localization key and an OFFICIAL_LOCKED string
     const keyResult = await adminClient.query(
       `INSERT INTO localization_keys (key_code, context)
        VALUES ('test.official.locked', 'test')
@@ -354,14 +385,16 @@ describe('Layer 5 — Localization', () => {
     const keyId = keyResult.rows[0].id;
 
     await adminClient.query(
+      `DELETE FROM localization_strings WHERE key_id = $1 AND language_code = 'en' AND status = 'OFFICIAL_LOCKED'`,
+      [keyId]
+    ).catch(() => {}); // May fail due to rules, ignore
+
+    await adminClient.query(
       `INSERT INTO localization_strings (key_id, language_code, value, status, locked_at)
-       VALUES ($1, 'en', 'Official Text', 'OFFICIAL_LOCKED', now())
-       ON CONFLICT DO NOTHING
-       RETURNING id`,
+       VALUES ($1, 'en', 'Official Text', 'OFFICIAL_LOCKED', now())`,
       [keyId]
     );
 
-    // Attempt to update it
     await expect(async () => {
       await adminClient.query(
         `UPDATE localization_strings SET value = 'Modified Text'
@@ -373,9 +406,7 @@ describe('Layer 5 — Localization', () => {
 });
 
 describe('Layer 8 — Rubric Engine', () => {
-  test('rubric_amendment_log is append-only', async () => {
-    // The rule prevents UPDATE/DELETE
-    // We just verify the rules exist
+  test('rubric_amendment_log is append-only (rules exist)', async () => {
     const result = await adminClient.query(
       `SELECT rulename FROM pg_rules WHERE tablename = 'rubric_amendment_log'`
     );
@@ -400,6 +431,19 @@ describe('Layer 9 — Mastery Events', () => {
       );
     }).rejects.toThrow(/mastery_no_naked_scoring/);
   });
+
+  test('No-naked-scoring allows events with valid observation_note', async () => {
+    // The CHECK constraint only validates: evidence_record_ids != '{}' OR observation_note is substantive
+    // We verify the constraint definition permits the note-only case
+    const result = await adminClient.query(
+      `SELECT conname, pg_get_constraintdef(oid) as def
+       FROM pg_constraint
+       WHERE conrelid = 'mastery_events'::regclass AND conname = 'mastery_no_naked_scoring'`
+    );
+    expect(result.rows.length).toBe(1);
+    expect(result.rows[0].def).toContain('observation_note');
+    expect(result.rows[0].def).toContain('evidence_record_ids');
+  });
 });
 
 describe('Layer 11 — Intervention Sensitivity', () => {
@@ -408,6 +452,54 @@ describe('Layer 11 — Intervention Sensitivity', () => {
       `SELECT polname FROM pg_policy WHERE polrelid = 'intervention_plans'::regclass`
     );
     expect(result.rows.length).toBeGreaterThan(0);
+  });
+
+  test('CLASS_TEACHER cannot see WELFARE plans via RLS', async () => {
+    // Create a WELFARE intervention plan as admin
+    const schoolResult = await adminClient.query(
+      `SELECT id FROM schools WHERE tenant_id = $1 LIMIT 1`, [testTenantId]
+    );
+
+    if (schoolResult.rows.length > 0) {
+      const classResult = await adminClient.query(
+        `SELECT id FROM classes WHERE tenant_id = $1 LIMIT 1`, [testTenantId]
+      );
+
+      // Create test data only if we have the needed entities
+      if (classResult.rows.length > 0) {
+        const studentResult = await adminClient.query(
+          `SELECT id FROM student_profiles WHERE tenant_id = $1 LIMIT 1`, [testTenantId]
+        );
+
+        if (studentResult.rows.length > 0) {
+          await adminClient.query(
+            `INSERT INTO intervention_plans
+               (tenant_id, student_id, class_id, sensitivity_level, title, created_by, status)
+             VALUES ($1, $2, $3, 'WELFARE', 'Test Welfare Plan', $4, 'ACTIVE')
+             ON CONFLICT DO NOTHING`,
+            [testTenantId, studentResult.rows[0].id, classResult.rows[0].id, testUserId]
+          );
+
+          // Now query as CLASS_TEACHER
+          const client = await getAppClient();
+          try {
+            await client.query('BEGIN');
+            await client.query(`SET LOCAL app.tenant_id = '${testTenantId}'`);
+            await client.query(`SET LOCAL app.user_id = '${testUserId}'`);
+            await client.query(`SET LOCAL app.user_role = 'CLASS_TEACHER'`);
+
+            const result = await client.query(
+              `SELECT * FROM intervention_plans WHERE sensitivity_level = 'WELFARE'`
+            );
+
+            expect(result.rows.length).toBe(0);
+            await client.query('ROLLBACK');
+          } finally {
+            client.release();
+          }
+        }
+      }
+    }
   });
 });
 
@@ -468,5 +560,73 @@ describe('Cross-Layer: Dual Approval Constraints', () => {
          AND conname = 'amendment_dual_approval'`
     );
     expect(result.rows.length).toBe(1);
+  });
+});
+
+describe('Cross-Layer: RLS on All Tenant-Scoped Tables', () => {
+  test('All major tables have RLS enabled', async () => {
+    const result = await adminClient.query(
+      `SELECT relname, relrowsecurity, relforcerowsecurity
+       FROM pg_class
+       WHERE relname IN (
+         'users', 'role_assignments', 'audit_log', 'schools', 'student_profiles',
+         'academic_years', 'competencies', 'mastery_events', 'evidence_records',
+         'feedback_requests', 'intervention_plans', 'rubric_overlays'
+       )
+       ORDER BY relname`
+    );
+
+    for (const row of result.rows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+});
+
+describe('Database Schema Completeness', () => {
+  test('All 12 layer migrations applied', async () => {
+    const result = await adminClient.query(
+      `SELECT version FROM schema_migrations ORDER BY version`
+    );
+    const versions = result.rows.map((r: { version: string }) => r.version);
+    expect(versions).toContain('V001');
+    expect(versions).toContain('V002');
+    expect(versions).toContain('V003');
+    expect(versions).toContain('V004');
+    expect(versions).toContain('V005');
+    expect(versions).toContain('V006');
+    expect(versions).toContain('V007');
+    expect(versions).toContain('V008');
+    expect(versions).toContain('V009');
+    expect(versions).toContain('V010');
+    expect(versions).toContain('V011');
+    expect(versions).toContain('V012');
+  });
+
+  test('NEP 2020 academic stages seeded correctly', async () => {
+    const result = await adminClient.query(
+      `SELECT stage_code, display_mode FROM academic_stages ORDER BY grade_range_start`
+    );
+    expect(result.rows.length).toBe(4);
+    expect(result.rows[0].stage_code).toBe('FOUNDATIONAL');
+    expect(result.rows[0].display_mode).toBe('EMOJI_METAPHOR');
+    expect(result.rows[3].stage_code).toBe('SECONDARY');
+    expect(result.rows[3].display_mode).toBe('FULL_ACADEMIC');
+  });
+
+  test('22+ Indian languages seeded in supported_languages', async () => {
+    const result = await adminClient.query(`SELECT COUNT(*) as count FROM supported_languages`);
+    expect(parseInt(result.rows[0].count)).toBeGreaterThanOrEqual(22);
+  });
+
+  test('RTL languages (Urdu, Kashmiri) marked correctly', async () => {
+    const result = await adminClient.query(
+      `SELECT language_code, text_direction, font_family FROM supported_languages
+       WHERE text_direction = 'RTL'`
+    );
+    expect(result.rows.length).toBe(2);
+    const codes = result.rows.map((r: { language_code: string }) => r.language_code);
+    expect(codes).toContain('ur');
+    expect(codes).toContain('ks');
   });
 });

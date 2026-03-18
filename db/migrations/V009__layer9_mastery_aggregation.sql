@@ -32,12 +32,7 @@ CREATE TABLE mastery_events (
     evidence_record_ids UUID[] NOT NULL DEFAULT '{}',
     observation_note TEXT,
     metadata JSONB DEFAULT '{}',
-    content_hash TEXT NOT NULL GENERATED ALWAYS AS (
-        encode(sha256(
-            (id::text || student_id::text || competency_id::text
-             || numeric_value::text || observed_at::text)::bytea
-        ), 'hex')
-    ) STORED,
+    content_hash TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT mastery_no_naked_scoring CHECK (
         evidence_record_ids != '{}' OR
@@ -191,5 +186,22 @@ CREATE TABLE stage_readiness_assessments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT unique_readiness UNIQUE (tenant_id, student_id, from_stage_id, to_stage_id, academic_year_id)
 );
+
+-- Trigger to compute content_hash on INSERT
+CREATE OR REPLACE FUNCTION compute_mastery_content_hash()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.content_hash := encode(sha256(
+        (NEW.id::text || NEW.student_id::text || NEW.competency_id::text
+         || NEW.numeric_value::text || extract(epoch from NEW.observed_at)::text)::bytea
+    ), 'hex');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_mastery_content_hash
+    BEFORE INSERT ON mastery_events
+    FOR EACH ROW
+    EXECUTE FUNCTION compute_mastery_content_hash();
 
 INSERT INTO schema_migrations (version, description) VALUES ('V009', 'Layer 9 — Mastery Aggregation Engine');

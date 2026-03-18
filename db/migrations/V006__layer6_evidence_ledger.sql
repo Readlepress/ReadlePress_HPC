@@ -61,13 +61,25 @@ CREATE TABLE evidence_custody_events (
     performed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     details JSONB,
     prev_event_hash TEXT,
-    event_hash TEXT NOT NULL GENERATED ALWAYS AS (
-        encode(sha256(
-            (id::text || event_type || evidence_id::text
-             || performed_at::text || COALESCE(prev_event_hash, ''))::bytea
-        ), 'hex')
-    ) STORED
+    event_hash TEXT NOT NULL DEFAULT ''
 );
+
+CREATE OR REPLACE FUNCTION compute_custody_event_hash()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.event_hash := encode(sha256(
+        (NEW.id::text || NEW.event_type || NEW.evidence_id::text
+         || extract(epoch from NEW.performed_at)::text
+         || COALESCE(NEW.prev_event_hash, ''))::bytea
+    ), 'hex');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_custody_event_hash
+    BEFORE INSERT ON evidence_custody_events
+    FOR EACH ROW
+    EXECUTE FUNCTION compute_custody_event_hash();
 
 -- Append-only enforcement for custody events
 CREATE RULE no_custody_update AS ON UPDATE TO evidence_custody_events DO INSTEAD NOTHING;

@@ -173,13 +173,26 @@ CREATE TABLE audit_log (
     metadata JSONB NULL,
     ip_address INET NULL,
     prev_log_hash TEXT NULL,
-    row_hash TEXT NOT NULL GENERATED ALWAYS AS (
-        encode(sha256(
-            (id::text || event_type || entity_id::text
-             || performed_at::text || COALESCE(prev_log_hash, ''))::bytea
-        ), 'hex')
-    ) STORED
+    row_hash TEXT NOT NULL DEFAULT ''
 );
+
+-- Trigger to compute row_hash on INSERT (immutable hash computation)
+CREATE OR REPLACE FUNCTION compute_audit_row_hash()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.row_hash := encode(sha256(
+        (NEW.id::text || NEW.event_type || NEW.entity_id::text
+         || extract(epoch from NEW.performed_at)::text
+         || COALESCE(NEW.prev_log_hash, ''))::bytea
+    ), 'hex');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_audit_row_hash
+    BEFORE INSERT ON audit_log
+    FOR EACH ROW
+    EXECUTE FUNCTION compute_audit_row_hash();
 
 -- Append-only enforcement for audit_log
 CREATE RULE no_audit_update AS ON UPDATE TO audit_log DO INSTEAD NOTHING;
