@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Merkle Root Certificate — {{ academic_year_label }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Noto Sans', 'DejaVu Sans', sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      color: #1a202c;
+      margin: 0;
+      padding: 0;
+    }
+    .certificate {
+      max-width: 100%;
+      padding: 24px;
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+      border-bottom: 3px solid #1a365d;
+    }
+    .title {
+      font-size: 18pt;
+      font-weight: bold;
+      color: #1a365d;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 12pt;
+      color: #4a5568;
+    }
+    .school-block {
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #f7fafc;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .school-name {
+      font-size: 14pt;
+      font-weight: bold;
+      color: #1a365d;
+    }
+    .udise {
+      font-size: 10pt;
+      color: #718096;
+      margin-top: 4px;
+    }
+    .merkle-section {
+      margin: 24px 0;
+      padding: 20px;
+      background: #edf2f7;
+      border-radius: 6px;
+      border: 1px solid #cbd5e0;
+    }
+    .merkle-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 12pt;
+      color: #2d3748;
+    }
+    .merkle-hash {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 9pt;
+      word-break: break-all;
+      background: white;
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e0;
+      margin: 8px 0;
+      letter-spacing: 0.5px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .info-item {
+      padding: 12px;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    .info-label {
+      font-size: 9pt;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 12pt;
+      font-weight: 600;
+      color: #1a202c;
+    }
+    .anchor-ref {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 9pt;
+      word-break: break-all;
+    }
+    .footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 9pt;
+      color: #718096;
+      text-align: center;
+    }
+    .date-block {
+      margin-top: 16px;
+      font-size: 10pt;
+      color: #4a5568;
+    }
+  </style>
+</head>
+<body>
+  <div class="certificate">
+    <div class="header">
+      <div class="title">Merkle Root Certificate</div>
+      <div class="subtitle">Year-End Integrity Anchor — NEP 2020 Compliant</div>
+    </div>
+
+    <div class="school-block">
+      <div class="school-name">{{ school_name }}{% if school_name_local %} / {{ school_name_local }}{% endif %}</div>
+      <div class="udise">UDISE Code: {{ udise_code }}</div>
+      <div class="udise">Academic Year: {{ academic_year_label }}</div>
+    </div>
+
+    <div class="merkle-section">
+      <h3>Merkle Root Hash</h3>
+      <div class="merkle-hash">{{ merkle_root_hash }}</div>
+
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Total Leaf Count</div>
+          <div class="info-value">{{ total_leaf_count }}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Tree Depth</div>
+          <div class="info-value">{{ tree_depth }}</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <div class="info-label">External TSA Anchor Reference</div>
+        <div class="anchor-ref">{{ external_anchor_ref }}</div>
+      </div>
+    </div>
+
+    <div class="date-block">
+      <strong>Certificate Generated:</strong>
+      {% if created_at %}
+      {{ created_at }}
+      {% else %}
+      —
+      {% endif %}
+    </div>
+
+    {% if external_anchor_timestamp %}
+    <div class="date-block">
+      <strong>External Anchor Timestamp:</strong> {{ external_anchor_timestamp }}
+    </div>
+    {% endif %}
+
+    <div class="footer">
+      <p>ReadlePress — Merkle Root Certificate | Immutable Year Snapshot | NEP 2020 Compliant</p>
+    </div>
+  </div>
+</body>
+</html>

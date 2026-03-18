@@ -1,0 +1,33 @@
+# PDF Service for ReadlePress HPC and Merkle certificate generation.
+# Set DATABASE_URL to connect to the main PostgreSQL database.
+# For local dev, the db service provides a PostgreSQL instance.
+services:
+  pdf-service:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://readlepress:readlepress@db:5432/readlepress}
+      - FLASK_APP=src.app:app
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: readlepress
+      POSTGRES_PASSWORD: readlepress
+      POSTGRES_DB: readlepress
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U readlepress"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
