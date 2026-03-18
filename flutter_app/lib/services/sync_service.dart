@@ -34,9 +34,9 @@ class SyncService {
   /// Check if device has network connectivity.
   Future<bool> get isOnline async {
     final result = await Connectivity().checkConnectivity();
-    return result.contains(ConnectivityResult.mobile) ||
-        result.contains(ConnectivityResult.wifi) ||
-        result.contains(ConnectivityResult.ethernet);
+    return result == ConnectivityResult.mobile ||
+        result == ConnectivityResult.wifi ||
+        result == ConnectivityResult.ethernet;
   }
 
   /// Sync pending mastery event drafts to /api/v1/capture/sync.
