@@ -1,6 +1,7 @@
 import { withTransaction } from '../config/database';
 import { insertAuditLog } from './audit.service';
 import { TrustLevel } from '../types';
+import { enqueueExifAnalysis } from '../jobs/worker';
 
 export async function uploadEvidence(
   tenantId: string,
@@ -16,6 +17,9 @@ export async function uploadEvidence(
     contentHash: string;
     trustLevel: TrustLevel;
     classification?: string;
+    fileBuffer?: Buffer;
+    schoolLat?: number;
+    schoolLon?: number;
   }
 ) {
   return withTransaction(async (client) => {
@@ -54,6 +58,11 @@ export async function uploadEvidence(
         classification: data.classification,
       },
     }, client);
+
+    // Enqueue EXIF analysis for photo uploads (non-blocking)
+    if (data.contentType === 'IMAGE' && data.fileBuffer) {
+      enqueueExifAnalysis(evidenceId, data.fileBuffer, data.schoolLat, data.schoolLon).catch(() => {});
+    }
 
     return { id: evidenceId };
   }, tenantId, userId, userRole);

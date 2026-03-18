@@ -421,10 +421,10 @@ describe('Layer 9 — Mastery Events', () => {
     await expect(async () => {
       await adminClient.query(
         `INSERT INTO mastery_events
-           (tenant_id, student_id, competency_id, class_id, assessor_id,
+           (tenant_id, student_id, competency_id, class_id, assessor_id, academic_year_id,
             numeric_value, observed_at, recorded_at, timestamp_source,
             evidence_record_ids, observation_note, event_status)
-         VALUES ($1, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), $2,
+         VALUES ($1, gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), $2, gen_random_uuid(),
                  0.75, now(), now(), 'DEVICE_CLOCK',
                  '{}', NULL, 'DRAFT')`,
         [testTenantId, testUserId]
@@ -432,13 +432,13 @@ describe('Layer 9 — Mastery Events', () => {
     }).rejects.toThrow(/mastery_no_naked_scoring/);
   });
 
-  test('No-naked-scoring allows events with valid observation_note', async () => {
-    // The CHECK constraint only validates: evidence_record_ids != '{}' OR observation_note is substantive
-    // We verify the constraint definition permits the note-only case
+  test('No-naked-scoring constraint definition exists on partition', async () => {
+    // After partitioning, the constraint lives on the partition child tables
     const result = await adminClient.query(
       `SELECT conname, pg_get_constraintdef(oid) as def
        FROM pg_constraint
-       WHERE conrelid = 'mastery_events'::regclass AND conname = 'mastery_no_naked_scoring'`
+       WHERE conname LIKE '%mastery_no_naked_scoring%'
+       LIMIT 1`
     );
     expect(result.rows.length).toBe(1);
     expect(result.rows[0].def).toContain('observation_note');
