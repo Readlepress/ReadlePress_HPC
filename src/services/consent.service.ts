@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { query, withTransaction } from '../config/database';
 import redis from '../config/redis';
 import { insertAuditLog } from './audit.service';
+import { sendOtp, isConfigured } from './sms.service';
 
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_OTP_ATTEMPTS = 3;
@@ -31,12 +32,17 @@ export async function initiateConsent(tenantId: string, phone: string, purpose: 
   await redis.setex(cooldownKey, OTP_COOLDOWN_SECONDS, '1');
   await redis.setex(`otp:attempts:${phone}:${purpose}`, OTP_EXPIRY_MINUTES * 60, '0');
 
-  // In production: send via MSG91 DLT-registered template
-  // For dev: return OTP (would never do this in production)
+  if (isConfigured()) {
+    const templateId = process.env.MSG91_OTP_TEMPLATE_ID || 'default_otp';
+    await sendOtp(phone, templateId, otp, { purpose });
+  } else if (process.env.NODE_ENV === 'development') {
+    console.log('[Consent] OTP (dev fallback):', { phone, otp, purpose });
+  }
+
   return {
     message: 'OTP sent successfully',
     expiresAt: expiresAt.toISOString(),
-    ...(process.env.NODE_ENV === 'development' ? { otp } : {}),
+    ...(process.env.NODE_ENV === 'development' && !isConfigured() ? { otp } : {}),
   };
 }
 

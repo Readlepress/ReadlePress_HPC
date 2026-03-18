@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="{{ primary_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <title>Holistic Progress Card — {{ student.first_name }} {{ student.last_name or '' }}</title>
+  <style>
+    /* Noto font family for all 22 Indian scripts (NEP 2020) */
+    :root {
+      --font-indic: 'Noto Sans Devanagari', 'Noto Sans Bengali', 'Noto Sans Telugu',
+        'Noto Sans Tamil', 'Noto Sans Gujarati', 'Noto Sans Kannada', 'Noto Sans Malayalam',
+        'Noto Sans Odia', 'Noto Sans Gurmukhi', 'Noto Sans', sans-serif;
+      --font-urdu: 'Noto Nastaliq Urdu', 'Noto Sans', sans-serif;
+      --font-english: 'Noto Sans', 'DejaVu Sans', sans-serif;
+      --color-header: #1a365d;
+      --color-border: #e2e8f0;
+      --color-accent: #2b6cb0;
+    }
+    @page {
+      size: A4;
+      margin: 18mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: var(--font-indic);
+      font-size: 10pt;
+      line-height: 1.4;
+      color: #1a202c;
+      margin: 0;
+      padding: 0;
+    }
+    .bilingual-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+    .col-primary {
+      padding: 8px;
+      {% if primary_rtl %}
+      direction: rtl;
+      text-align: right;
+      font-family: var(--font-urdu);
+      {% else %}
+      direction: ltr;
+      text-align: left;
+      font-family: var(--font-indic);
+      {% endif %}
+    }
+    .col-secondary {
+      padding: 8px;
+      {% if secondary_rtl %}
+      direction: rtl;
+      text-align: right;
+      font-family: var(--font-urdu);
+      {% else %}
+      direction: ltr;
+      text-align: left;
+      font-family: var(--font-english);
+      {% endif %}
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid var(--color-header);
+    }
+    .school-name {
+      font-size: 14pt;
+      font-weight: bold;
+      color: var(--color-header);
+      margin-bottom: 4px;
+    }
+    .udise {
+      font-size: 9pt;
+      color: #4a5568;
+    }
+    .report-title {
+      font-size: 12pt;
+      font-weight: bold;
+      margin-top: 8px;
+      color: var(--color-accent);
+    }
+    .student-section {
+      margin-bottom: 16px;
+      padding: 12px;
+      background: #f7fafc;
+      border-radius: 4px;
+      border: 1px solid var(--color-border);
+    }
+    .student-section h3 {
+      margin: 0 0 8px 0;
+      font-size: 11pt;
+      color: var(--color-header);
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px dotted var(--color-border);
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      font-weight: 500;
+      color: #4a5568;
+    }
+    .mastery-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 9pt;
+    }
+    .mastery-table th,
+    .mastery-table td {
+      border: 1px solid var(--color-border);
+      padding: 8px;
+      text-align: left;
+    }
+    .mastery-table th {
+      background: var(--color-header);
+      color: white;
+      font-weight: 600;
+    }
+    .mastery-table tr:nth-child(even) {
+      background: #f7fafc;
+    }
+    .mastery-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .descriptor-cell {
+      min-height: 24px;
+    }
+    .footer {
+      margin-top: 24px;
+      padding-top: 12px;
+      border-top: 1px solid var(--color-border);
+      font-size: 8pt;
+      color: #718096;
+      text-align: center;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="school-name">{{ school_name }}{% if school_name_local %} / {{ school_name_local }}{% endif %}</div>
+    <div class="udise">UDISE: {{ udise_code }}</div>
+    <div class="report-title">Holistic Progress Card — NEP 2020</div>
+    <div class="udise">Academic Year: {{ academic_year_label }}</div>
+  </div>
+
+  <div class="student-section">
+    <h3>Student Information</h3>
+    <div class="bilingual-grid">
+      <div class="col-primary">
+        <div class="info-row">
+          <span class="info-label">Name:</span>
+          <span>{{ student.first_name_local or student.first_name }} {{ student.last_name_local or student.last_name or '' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Grade:</span>
+          <span>{{ enrolment.grade or '—' }}{% if enrolment.section %} - {{ enrolment.section }}{% endif %}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Roll No:</span>
+          <span>{{ enrolment.roll_number or '—' }}</span>
+        </div>
+      </div>
+      <div class="col-secondary">
+        <div class="info-row">
+          <span class="info-label">Name:</span>
+          <span>{{ student.first_name }} {{ student.last_name or '' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Grade:</span>
+          <span>{{ enrolment.grade or '—' }}{% if enrolment.section %} - {{ enrolment.section }}{% endif %}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Roll No:</span>
+          <span>{{ enrolment.roll_number or '—' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin: 16px 0 8px 0; font-size: 11pt; color: var(--color-header);">
+    Domain-wise Competency Mastery
+  </h3>
+
+  <table class="mastery-table">
+    <thead>
+      <tr>
+        <th style="width: 25%;">Domain</th>
+        <th style="width: 35%;">Competency ({{ primary_lang }})</th>
+        <th style="width: 20%;">Descriptor ({{ primary_lang }})</th>
+        <th style="width: 20%;">Descriptor ({{ secondary_lang }})</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in mastery_rows %}
+      <tr>
+        <td>{{ row.domain }}{% if row.domain_local %} / {{ row.domain_local }}{% endif %}</td>
+        <td>{{ row.competency_name }}{% if row.competency_name_local %} / {{ row.competency_name_local }}{% endif %}</td>
+        <td class="col-primary descriptor-cell">{{ row.descriptor_primary }}</td>
+        <td class="col-secondary descriptor-cell">{{ row.descriptor_secondary }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="text-align: center; color: #718096;">No mastery data recorded for this period.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>ReadlePress — Holistic Progress Card | NEP 2020 Compliant | Generated from locked year snapshot</p>
+  </div>
+</body>
+</html>
