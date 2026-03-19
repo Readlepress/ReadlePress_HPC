@@ -6,10 +6,11 @@
 -- 90. portability_standards — Data portability format definitions
 CREATE TABLE portability_standards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     standard_code TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1,
-    schema_definition JSONB NOT NULL,
+    name TEXT,
+    version INTEGER,
+    schema_definition JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -19,13 +20,12 @@ CREATE TABLE portability_packages (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     student_id UUID NOT NULL REFERENCES student_profiles(id),
     standard_id UUID NOT NULL REFERENCES portability_standards(id),
-    consent_scope TEXT[],
-    signing_key_id UUID,
+    academic_year_id UUID REFERENCES academic_years(id),
+    consent_scope TEXT[] NOT NULL,
+    signing_key_id UUID REFERENCES export_signing_keys(id),
     payload_hash TEXT NOT NULL,
     package_status TEXT NOT NULL DEFAULT 'GENERATED'
-        CHECK (package_status IN ('GENERATED', 'DELIVERED', 'REVOKED')),
-    revocation_status TEXT
-        CHECK (revocation_status IN (NULL, 'REVOKED')),
+        CHECK (package_status IN ('GENERATED', 'DELIVERED', 'VERIFIED', 'REVOKED')),
     revoked_at TIMESTAMPTZ,
     revocation_reason TEXT,
     generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -39,8 +39,8 @@ CREATE TABLE portability_package_sections (
     package_id UUID NOT NULL REFERENCES portability_packages(id),
     section_type TEXT NOT NULL,
     content_hash TEXT NOT NULL,
-    signature TEXT,
-    is_excluded BOOLEAN NOT NULL DEFAULT FALSE,
+    section_signature TEXT,
+    is_included BOOLEAN NOT NULL DEFAULT TRUE,
     exclusion_reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -49,30 +49,30 @@ CREATE TABLE portability_package_sections (
 CREATE TABLE import_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    receiving_school_id UUID NOT NULL REFERENCES schools(id),
-    package_id UUID NOT NULL REFERENCES portability_packages(id),
     received_package_hash TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PENDING'
+    source_school_udise TEXT,
+    source_tenant_id UUID,
+    student_id UUID REFERENCES student_profiles(id),
+    status TEXT NOT NULL DEFAULT 'RECEIVED'
         CHECK (status IN (
-            'PENDING', 'INTEGRITY_VERIFIED', 'BRIDGE_REVIEW',
+            'RECEIVED', 'VALIDATING', 'BRIDGE_REVIEW',
             'ACCEPTED', 'REJECTED', 'COMPLETED'
         )),
+    validation_result JSONB,
     records_imported INTEGER NOT NULL DEFAULT 0,
     records_skipped INTEGER NOT NULL DEFAULT 0,
-    imported_by UUID REFERENCES users(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT unique_import_hash UNIQUE (tenant_id, received_package_hash)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 94. credential_revocation_list — Public revocation registry (no tenant_id)
 CREATE TABLE credential_revocation_list (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     package_id UUID NOT NULL REFERENCES portability_packages(id),
-    revocation_status TEXT NOT NULL,
+    revocation_status TEXT NOT NULL
+        CHECK (revocation_status IN ('REVOKED', 'SUSPENDED')),
     revocation_reason_code TEXT NOT NULL,
-    revoked_at TIMESTAMPTZ NOT NULL,
-    issued_by_udise TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    revoked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    issued_by_udise TEXT
 );
 
 -- Append-only enforcement for credential_revocation_list
@@ -84,11 +84,11 @@ CREATE TABLE taxonomy_bridge_mappings_applied (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     package_id UUID NOT NULL REFERENCES portability_packages(id),
-    source_competency_uid TEXT NOT NULL,
-    target_competency_uid TEXT NOT NULL,
-    equivalence_weight DECIMAL,
+    source_competency_uid TEXT,
+    target_competency_uid TEXT,
     lineage_type TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    equivalence_weight DECIMAL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 96. import_record_provenance — Tracks lineage of imported records
@@ -97,7 +97,7 @@ CREATE TABLE import_record_provenance (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     import_request_id UUID NOT NULL REFERENCES import_requests(id),
     source_entity_id_hash TEXT NOT NULL,
-    source_entity_type TEXT NOT NULL,
+    source_entity_type TEXT,
     imported_entity_id UUID,
     imported_entity_type TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -108,11 +108,12 @@ CREATE TABLE portability_consent_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     student_id UUID NOT NULL REFERENCES student_profiles(id),
-    consent_purpose TEXT NOT NULL,
+    consent_purpose TEXT NOT NULL
+        CHECK (consent_purpose IN ('PORTABILITY_EXPORT', 'PORTABILITY_IMPORT', 'CREDENTIAL_SHARING')),
     consent_status TEXT NOT NULL DEFAULT 'ACTIVE'
         CHECK (consent_status IN ('ACTIVE', 'WITHDRAWN')),
     granted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    withdrawn_at TIMESTAMPTZ
 );
 
 INSERT INTO schema_migrations (version, description) VALUES ('V025', 'Layer 22 — Portability & Verifiable Credentials');
