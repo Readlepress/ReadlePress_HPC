@@ -190,5 +190,5 @@ CREATE INDEX IF NOT EXISTS idx_portability_consent_student ON portability_consen
 CREATE INDEX IF NOT EXISTS idx_engagement_sessions_partner_verification ON engagement_sessions(partner_id, verification_status);
 CREATE INDEX IF NOT EXISTS idx_partner_vetting_log_partner ON partner_vetting_log(partner_id, performed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_session_student_participants_session ON session_student_participants(session_id);
-CREATE INDEX IF NOT EXISTS idx_alumni_profiles_school ON alumni_profiles(tenant_id, school_id);
+CREATE INDEX IF NOT EXISTS idx_alumni_profiles_tenant ON alumni_profiles(tenant_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_engagement_ledger_aggregates_school ON engagement_ledger_aggregates(school_id, academic_year_id);
