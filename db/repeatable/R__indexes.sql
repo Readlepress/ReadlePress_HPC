@@ -91,3 +91,39 @@ CREATE INDEX IF NOT EXISTS idx_credit_overlay_links_student ON credit_overlay_li
 -- JSONB GIN indexes for policy packs and metadata
 CREATE INDEX IF NOT EXISTS idx_evidence_records_metadata ON evidence_records USING GIN (metadata);
 CREATE INDEX IF NOT EXISTS idx_mastery_events_metadata ON mastery_events USING GIN (metadata);
+
+-- ===== Layer 13 — Credit Engine =====
+CREATE INDEX IF NOT EXISTS idx_credit_ledger_student_year ON credit_ledger_entries(student_id, academic_year_id);
+CREATE INDEX IF NOT EXISTS idx_credit_computation_jobs_status ON credit_computation_jobs(status)
+    WHERE status IN ('PENDING', 'PROCESSING');
+
+-- ===== Layer 14 — Export / Document Generation =====
+CREATE INDEX IF NOT EXISTS idx_export_jobs_status_tenant ON export_jobs(status, tenant_id);
+CREATE INDEX IF NOT EXISTS idx_export_document_records_job ON export_document_records(export_job_id);
+
+-- ===== Layer 15 — Governance / Override =====
+CREATE INDEX IF NOT EXISTS idx_override_requests_status_tenant ON override_requests(status, tenant_id);
+
+-- ===== Layer 16 — AI Generation =====
+CREATE INDEX IF NOT EXISTS idx_ai_generation_log_tenant_created ON ai_generation_log(tenant_id, created_at);
+
+-- ===== Layer 19 — SQAA Engine =====
+CREATE INDEX IF NOT EXISTS idx_sqaa_indicator_values_school_year ON sqaa_indicator_values(school_id, academic_year_id);
+CREATE INDEX IF NOT EXISTS idx_sqaa_computation_jobs_status ON sqaa_computation_jobs(status)
+    WHERE status IN ('PENDING', 'PROCESSING');
+CREATE INDEX IF NOT EXISTS idx_compliance_checklists_school_directive ON compliance_checklists(school_id, directive_id);
+
+-- ===== Layer 18 — CPD =====
+CREATE INDEX IF NOT EXISTS idx_cpd_hours_ledger_teacher ON cpd_hours_ledger(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_cpd_aggregation_jobs_status ON cpd_aggregation_jobs(status)
+    WHERE status IN ('PENDING', 'PROCESSING');
+
+-- ===== Layer 17 — Portability =====
+CREATE INDEX IF NOT EXISTS idx_portability_packages_student ON portability_packages(student_id);
+
+-- ===== Layer 20 — Community Partnership =====
+CREATE INDEX IF NOT EXISTS idx_engagement_sessions_partner_school ON engagement_sessions(partner_id, school_id);
+CREATE INDEX IF NOT EXISTS idx_engagement_computation_jobs_status ON engagement_computation_jobs(status)
+    WHERE status IN ('PENDING', 'PROCESSING');
+CREATE INDEX IF NOT EXISTS idx_partner_safeguarding_log_partner_severity ON partner_safeguarding_log(partner_id, severity);
+CREATE INDEX IF NOT EXISTS idx_community_partners_vetting_active ON community_partners(vetting_status, is_active);
