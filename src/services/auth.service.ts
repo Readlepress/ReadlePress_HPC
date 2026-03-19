@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { query, withTransaction } from '../config/database';
+import { query, withTransaction, adminPool } from '../config/database';
 import redis from '../config/redis';
 
 const SALT_ROUNDS = 12;
@@ -10,7 +10,8 @@ export async function authenticateUser(email: string | undefined, phone: string 
   const identifierField = email ? 'email' : 'phone';
   const identifierValue = email || phone;
 
-  const result = await query(
+  // Login queries bypass RLS (we don't know tenant_id yet)
+  const result = await adminPool.query(
     `SELECT u.id, u.tenant_id, u.password_hash, u.status, u.failed_login_attempts, u.locked_until,
             ra.role_code
      FROM users u
@@ -42,7 +43,7 @@ export async function authenticateUser(email: string | undefined, phone: string 
       ? new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000)
       : null;
 
-    await query(
+    await adminPool.query(
       'UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3',
       [newAttempts, lockUntil, user.id]
     );
@@ -50,7 +51,7 @@ export async function authenticateUser(email: string | undefined, phone: string 
     throw new Error('INVALID_CREDENTIALS');
   }
 
-  await query(
+  await adminPool.query(
     'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1',
     [user.id]
   );
