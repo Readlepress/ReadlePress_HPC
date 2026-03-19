@@ -18,14 +18,22 @@ import interventionRoutes from './routes/intervention.routes';
 import overlayRoutes from './routes/overlay.routes';
 import uiSchemaRoutes from './routes/ui-schema.routes';
 
-const app = Fastify({
-  logger: {
-    level: process.env.LOG_LEVEL || 'info',
-    transport: process.env.NODE_ENV === 'development'
-      ? { target: 'pino-pretty' }
-      : undefined,
-  },
-});
+function getLoggerConfig() {
+  try {
+    if (process.env.NODE_ENV === 'development') {
+      require.resolve('pino-pretty');
+      return {
+        level: process.env.LOG_LEVEL || 'info',
+        transport: { target: 'pino-pretty' },
+      };
+    }
+  } catch {
+    // pino-pretty not available
+  }
+  return { level: process.env.LOG_LEVEL || 'info' };
+}
+
+const app = Fastify({ logger: getLoggerConfig() });
 
 async function buildApp() {
   await app.register(fastifyCors, { origin: true });
@@ -71,11 +79,21 @@ async function start() {
 
     await server.listen({ port, host });
     console.log(`ReadlePress API server running on ${host}:${port}`);
+    console.log(`  Health: http://localhost:${port}/health`);
+    console.log(`  API:    http://localhost:${port}/api/v1/`);
   } catch (err) {
     console.error('Failed to start server:', err);
     process.exit(1);
   }
 }
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err);
+});
 
 start();
 
