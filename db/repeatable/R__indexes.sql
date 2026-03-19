@@ -145,8 +145,8 @@ CREATE INDEX IF NOT EXISTS idx_export_authorizations_status ON export_authorizat
 
 -- Layer 15 — additional
 CREATE INDEX IF NOT EXISTS idx_compliance_checklists_school_directive_status ON compliance_checklists(school_id, directive_id, status);
-CREATE INDEX IF NOT EXISTS idx_governance_alerts_severity_status ON governance_alerts(severity, status);
-CREATE INDEX IF NOT EXISTS idx_override_application_log_request ON override_application_log(override_request_id);
+CREATE INDEX IF NOT EXISTS idx_governance_alerts_severity_status ON governance_alerts(severity, resolution_status);
+CREATE INDEX IF NOT EXISTS idx_override_application_log_request ON override_application_log(override_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_reconstruction_student ON compliance_reconstruction_requests(student_id);
 
 -- Layer 16 — additional
@@ -156,7 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_prompt_templates_tenant_code ON prompt_templates(
 
 -- Layer 17 — District & State
 CREATE INDEX IF NOT EXISTS idx_governance_nodes_parent ON governance_nodes(parent_node_id);
-CREATE INDEX IF NOT EXISTS idx_policy_packs_node_status ON policy_packs(governance_node_id, status);
+CREATE INDEX IF NOT EXISTS idx_policy_packs_node_status ON policy_packs(node_id, status);
 CREATE INDEX IF NOT EXISTS idx_district_oversight_school ON district_oversight_assignments(school_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_inter_district_transfer_student ON inter_district_transfer_records(student_id, status);
 
@@ -174,21 +174,21 @@ CREATE INDEX IF NOT EXISTS idx_compliance_risk_computation_status ON compliance_
 CREATE INDEX IF NOT EXISTS idx_directive_distribution_log_directive ON directive_distribution_log(directive_id);
 
 -- Layer 21 — Teacher CPD additional
-CREATE INDEX IF NOT EXISTS idx_cpd_hours_ledger_teacher_verified ON cpd_hours_ledger(teacher_id, verified_at);
+CREATE INDEX IF NOT EXISTS idx_cpd_hours_ledger_teacher_year ON cpd_hours_ledger(teacher_id, academic_year_label);
 CREATE INDEX IF NOT EXISTS idx_cpd_activity_records_teacher ON cpd_activity_records(teacher_id, verification_status);
-CREATE INDEX IF NOT EXISTS idx_peer_observation_records_observer ON peer_observation_records(observer_teacher_id, status);
-CREATE INDEX IF NOT EXISTS idx_peer_observation_records_observed ON peer_observation_records(observed_teacher_id, status);
+CREATE INDEX IF NOT EXISTS idx_peer_observation_records_observer ON peer_observation_records(observer_teacher_id);
+CREATE INDEX IF NOT EXISTS idx_peer_observation_records_observed ON peer_observation_records(observed_teacher_id);
 CREATE INDEX IF NOT EXISTS idx_npst_competency_assessments_teacher ON npst_competency_assessments(teacher_id, npst_version_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_professional_profiles_teacher ON teacher_professional_profiles(teacher_id);
 
 -- Layer 22 — Portability additional
 CREATE INDEX IF NOT EXISTS idx_portability_packages_student_status ON portability_packages(student_id, package_status);
-CREATE INDEX IF NOT EXISTS idx_import_requests_school ON import_requests(receiving_school_id, status);
+CREATE INDEX IF NOT EXISTS idx_import_requests_status ON import_requests(status, tenant_id);
 CREATE INDEX IF NOT EXISTS idx_portability_consent_student ON portability_consent_records(student_id);
 
 -- Layer 23 — Community Partners additional
 CREATE INDEX IF NOT EXISTS idx_engagement_sessions_partner_verification ON engagement_sessions(partner_id, verification_status);
-CREATE INDEX IF NOT EXISTS idx_partner_vetting_log_partner ON partner_vetting_log(partner_id, performed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_partner_vetting_log_partner ON partner_vetting_log(partner_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_session_student_participants_session ON session_student_participants(session_id);
 CREATE INDEX IF NOT EXISTS idx_alumni_profiles_tenant ON alumni_profiles(tenant_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_engagement_ledger_aggregates_school ON engagement_ledger_aggregates(school_id, academic_year_id);

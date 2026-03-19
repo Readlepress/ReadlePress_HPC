@@ -6,6 +6,9 @@ const mockWithTransaction = jest.fn();
 jest.mock('../../src/config/database', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
   withTransaction: (...args: unknown[]) => mockWithTransaction(...args),
+  adminPool: {
+    query: (...args: unknown[]) => mockQuery(...args),
+  },
 }));
 
 jest.mock('../../src/config/redis', () => ({
