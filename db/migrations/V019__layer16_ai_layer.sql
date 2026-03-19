@@ -3,16 +3,17 @@
 -- Provider registry, prompt governance, bias monitoring, consent checks
 -- ============================================================================
 
--- 1. ai_provider_registry — Global AI provider configuration
+-- 1. ai_provider_registry — AI provider configuration per tenant
 CREATE TABLE ai_provider_registry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL UNIQUE,
-    adapter_type TEXT NOT NULL,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+    provider_name TEXT NOT NULL,
+    adapter_class TEXT,
     api_endpoint TEXT,
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     dpa_signed_at TIMESTAMPTZ,
-    config JSONB NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'SUSPENDED', 'DEPRECATED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -22,13 +23,14 @@ CREATE TABLE prompt_templates (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     template_code TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
-    prompt_text TEXT NOT NULL,
-    pii_exclusion_fields TEXT[] NOT NULL DEFAULT ARRAY['student_name', 'apaar_id', 'aadhaar', 'disability_category', 'social_category'],
+    template_text TEXT NOT NULL,
+    pii_exclusion_fields TEXT[] NOT NULL DEFAULT '{}',
     max_output_words INTEGER NOT NULL DEFAULT 500,
     max_free_text_chars INTEGER NOT NULL DEFAULT 2000,
     output_format_schema JSONB,
     status TEXT NOT NULL DEFAULT 'DRAFT'
-        CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUSPENDED', 'ARCHIVED')),
+        CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUSPENDED')),
+    published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -41,12 +43,11 @@ CREATE TABLE ai_generation_log (
     prompt_hash TEXT NOT NULL,
     input_data_hash TEXT NOT NULL,
     raw_output_hash TEXT,
-    output_word_count INTEGER,
     generation_time_ms INTEGER,
+    token_count INTEGER,
     human_decision TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (human_decision IN ('PENDING', 'PROMOTED', 'EDITED_THEN_PROMOTED', 'REJECTED', 'EXPIRED')),
     edit_distance INTEGER,
-    ai_assisted_flag_set BOOLEAN NOT NULL DEFAULT FALSE,
     prev_log_hash TEXT,
     log_hash TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -80,8 +81,8 @@ CREATE TABLE ai_generation_subject_links (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     generation_id UUID NOT NULL REFERENCES ai_generation_log(id),
     anonymised_id TEXT NOT NULL,
-    real_entity_type TEXT NOT NULL,
-    real_entity_id UUID NOT NULL,
+    real_entity_type TEXT,
+    real_entity_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -93,24 +94,44 @@ CREATE TABLE ai_draft_contents (
     draft_text TEXT NOT NULL,
     target_entity_type TEXT,
     target_entity_id UUID,
+    ai_assisted BOOLEAN NOT NULL DEFAULT TRUE,
     promotion_status TEXT NOT NULL DEFAULT 'DRAFT'
-        CHECK (promotion_status IN ('DRAFT', 'PROMOTED', 'REJECTED', 'EXPIRED')),
+        CHECK (promotion_status IN ('DRAFT', 'PROMOTED', 'REJECTED')),
     promoted_at TIMESTAMPTZ,
     promoted_by UUID REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Trigger: ai_draft_contents.ai_assisted cannot be set to FALSE once TRUE
+CREATE OR REPLACE FUNCTION protect_ai_assisted_flag()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.ai_assisted = TRUE AND NEW.ai_assisted = FALSE THEN
+        RAISE EXCEPTION 'Cannot set ai_assisted to FALSE once it has been set to TRUE.'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_protect_ai_assisted_flag
+    BEFORE UPDATE ON ai_draft_contents
+    FOR EACH ROW
+    EXECUTE FUNCTION protect_ai_assisted_flag();
+
 -- 6. bias_monitoring_runs — Periodic bias metric computation results
 CREATE TABLE bias_monitoring_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    metrics_computed JSONB NOT NULL,
-    thresholds_breached TEXT[],
-    severity TEXT NOT NULL DEFAULT 'NONE'
-        CHECK (severity IN ('NONE', 'WARNING', 'CRITICAL')),
     template_id UUID REFERENCES prompt_templates(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    metric_code TEXT NOT NULL,
+    measured_value DECIMAL,
+    threshold_warning DECIMAL,
+    threshold_critical DECIMAL,
+    result TEXT NOT NULL DEFAULT 'PASS'
+        CHECK (result IN ('PASS', 'WARNING', 'CRITICAL')),
+    sample_size INTEGER,
+    run_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 7. bias_monitoring_policy — Threshold configuration for bias detection
@@ -118,11 +139,11 @@ CREATE TABLE bias_monitoring_policy (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     metric_code TEXT NOT NULL,
-    threshold_value DECIMAL NOT NULL,
-    severity_level TEXT NOT NULL DEFAULT 'WARNING'
-        CHECK (severity_level IN ('WARNING', 'CRITICAL')),
+    threshold_warning DECIMAL,
+    threshold_critical DECIMAL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_bias_metric_per_tenant UNIQUE (tenant_id, metric_code)
 );
 
 -- 8. ai_consent_checks — Append-only record of AI consent verification
@@ -130,8 +151,10 @@ CREATE TABLE ai_consent_checks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     student_id UUID NOT NULL REFERENCES student_profiles(id),
-    consent_status TEXT NOT NULL,
-    checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    consent_status TEXT NOT NULL
+        CHECK (consent_status IN ('VALID', 'MISSING', 'EXPIRED')),
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    generation_id UUID REFERENCES ai_generation_log(id)
 );
 
 -- Append-only enforcement for ai_consent_checks

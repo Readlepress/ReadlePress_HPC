@@ -3,44 +3,39 @@
 -- SLA management, onboarding, training, support, exit procedures
 -- ============================================================================
 
--- 1. sla_definitions — Global SLA tier definitions
+-- 1. sla_definitions — SLA tier definitions with per-metric targets
 CREATE TABLE sla_definitions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     tier_code TEXT NOT NULL
         CHECK (tier_code IN ('SCHOOL_STANDARD', 'DISTRICT_PREMIUM', 'STATE_ENTERPRISE')),
-    uptime_commitment DECIMAL NOT NULL,
-    api_response_p95_ms INTEGER NOT NULL,
-    rpo_minutes INTEGER NOT NULL,
-    rto_minutes INTEGER NOT NULL,
-    p1_response_minutes INTEGER NOT NULL,
-    p2_response_minutes INTEGER NOT NULL,
-    exit_export_days INTEGER NOT NULL,
+    metric_code TEXT NOT NULL,
+    target_value DECIMAL NOT NULL,
+    unit TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT unique_sla_tier UNIQUE (tier_code)
+    CONSTRAINT unique_sla_tier_metric UNIQUE (tier_code, metric_code)
 );
 
 -- 2. tenant_sla_assignments — Maps tenants to their SLA tier
 CREATE TABLE tenant_sla_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    sla_definition_id UUID NOT NULL REFERENCES sla_definitions(id),
+    sla_tier TEXT NOT NULL,
     custom_overrides JSONB NOT NULL DEFAULT '{}',
     effective_from DATE,
     effective_until DATE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT unique_tenant_sla UNIQUE (tenant_id)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 3. sla_monitoring_records — Continuous SLA metric measurements
 CREATE TABLE sla_monitoring_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    metric_name TEXT NOT NULL,
-    metric_value DECIMAL NOT NULL,
-    threshold_value DECIMAL NOT NULL,
-    is_compliant BOOLEAN NOT NULL,
-    measured_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    metric_code TEXT NOT NULL,
+    measured_value DECIMAL,
+    target_value DECIMAL,
+    is_within_sla BOOLEAN,
+    measured_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 4. onboarding_programmes — Onboarding programme definitions
@@ -48,6 +43,7 @@ CREATE TABLE onboarding_programmes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     programme_type TEXT,
+    name TEXT NOT NULL,
     phases JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -61,19 +57,19 @@ CREATE TABLE tenant_onboarding_records (
     completion_percentage DECIMAL NOT NULL DEFAULT 0,
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT unique_tenant_onboarding UNIQUE (tenant_id)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 6. training_modules — Global training content registry
+-- 6. training_modules — Training content registry per tenant
 CREATE TABLE training_modules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+    title TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
+    content_ref TEXT,
     platform_version_from TEXT,
     platform_version_to TEXT,
     is_stale BOOLEAN NOT NULL DEFAULT FALSE,
-    content_ref TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -93,7 +89,7 @@ CREATE TABLE user_training_records (
 CREATE TABLE support_tickets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    submitted_by UUID NOT NULL REFERENCES users(id),
+    reported_by UUID NOT NULL REFERENCES users(id),
     priority TEXT NOT NULL DEFAULT 'P3'
         CHECK (priority IN ('P1', 'P2', 'P3', 'P4')),
     subject TEXT NOT NULL,
@@ -120,20 +116,22 @@ CREATE TABLE exit_procedure_requests (
     deletion_scheduled_date DATE,
     export_delivery_deadline DATE,
     legal_hold_prevents_deletion BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT deletion_requires_acknowledgement CHECK (
+        deletion_scheduled_date IS NULL OR package_acknowledged_at IS NOT NULL
+    )
 );
 
 -- 10. audit_access_grants — Time-bounded audit access for external auditors
 CREATE TABLE audit_access_grants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    granted_to UUID NOT NULL REFERENCES users(id),
+    user_id UUID NOT NULL REFERENCES users(id),
     scope TEXT[] NOT NULL,
     granted_by UUID NOT NULL REFERENCES users(id),
-    valid_from TIMESTAMPTZ,
-    valid_until TIMESTAMPTZ,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    granted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 INSERT INTO schema_migrations (version, description) VALUES ('V021', 'Layer 18 — Business & Procurement');

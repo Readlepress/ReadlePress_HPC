@@ -3,7 +3,7 @@
 -- Override workflows, permission snapshots, compliance reconstruction
 -- ============================================================================
 
--- 1. override_requests — Formal override workflow with dual approval and expiry
+-- 1. override_requests — Formal override workflow with dual approval
 CREATE TABLE override_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -24,12 +24,9 @@ CREATE TABLE override_requests (
             'REJECTED', 'WITHDRAWN', 'EXPIRED'
         )),
     first_approver_id UUID REFERENCES users(id),
-    first_approved_at TIMESTAMPTZ,
     second_approver_id UUID REFERENCES users(id),
-    second_approved_at TIMESTAMPTZ,
     applied_at TIMESTAMPTZ,
     applied_by UUID REFERENCES users(id),
-    expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '48 hours',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT override_dual_approval CHECK (
         first_approver_id IS NULL OR
@@ -46,9 +43,9 @@ CREATE TABLE override_requests (
 CREATE TABLE override_application_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    override_request_id UUID NOT NULL REFERENCES override_requests(id),
-    before_state JSONB NOT NULL,
-    after_state JSONB NOT NULL,
+    override_id UUID NOT NULL REFERENCES override_requests(id),
+    before_state JSONB,
+    after_state JSONB,
     change_diff JSONB,
     applied_by UUID NOT NULL REFERENCES users(id),
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -63,10 +60,10 @@ CREATE TABLE permission_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     event_type TEXT NOT NULL,
-    event_entity_id UUID NOT NULL,
+    event_entity_id UUID,
     user_id UUID NOT NULL REFERENCES users(id),
     permissions_at_event JSONB NOT NULL,
-    role_at_event TEXT NOT NULL,
+    role_at_event TEXT,
     captured_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -79,7 +76,7 @@ CREATE TABLE audit_chain_verification_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     table_name TEXT NOT NULL,
-    total_records BIGINT,
+    total_rows BIGINT,
     broken_chains BIGINT,
     first_broken_id UUID,
     run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -90,12 +87,12 @@ CREATE TABLE audit_chain_verification_runs (
 CREATE TABLE governance_policy_registry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    policy_code TEXT NOT NULL UNIQUE,
-    policy_type TEXT,
-    rules JSONB NOT NULL,
+    policy_key TEXT NOT NULL,
+    policy_value JSONB,
+    category TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    version INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_policy_key_per_tenant UNIQUE (tenant_id, policy_key)
 );
 
 -- 6. compliance_reconstruction_requests — Full student record reconstruction
@@ -106,21 +103,20 @@ CREATE TABLE compliance_reconstruction_requests (
     requested_by UUID NOT NULL REFERENCES users(id),
     reason TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'PENDING'
-        CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
-    output_ref TEXT,
-    requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    completed_at TIMESTAMPTZ
+        CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED')),
+    output_data JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 7. data_retention_execution_log — Record of retention policy executions
 CREATE TABLE data_retention_execution_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    policy_id UUID NOT NULL REFERENCES governance_policy_registry(id),
-    action_type TEXT,
+    policy_key TEXT NOT NULL,
     records_affected INTEGER,
-    executed_by UUID NOT NULL REFERENCES users(id),
-    executed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    action_type TEXT,
+    executed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    executed_by UUID NOT NULL REFERENCES users(id)
 );
 
 -- Append-only enforcement for data_retention_execution_log
@@ -138,14 +134,15 @@ CREATE TABLE governance_alerts (
     entity_id UUID,
     message TEXT NOT NULL,
     requires_written_resolution BOOLEAN NOT NULL DEFAULT FALSE,
+    resolution_status TEXT NOT NULL DEFAULT 'OPEN'
+        CHECK (resolution_status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED')),
     resolution_notes TEXT,
     resolved_by UUID REFERENCES users(id),
     resolved_at TIMESTAMPTZ,
-    status TEXT NOT NULL DEFAULT 'OPEN'
-        CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ESCALATED')),
+    auto_escalate_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT resolution_notes_required CHECK (
-        NOT (requires_written_resolution = TRUE AND status = 'RESOLVED')
+        NOT (requires_written_resolution = TRUE AND resolution_status = 'RESOLVED')
         OR (resolution_notes IS NOT NULL AND length(resolution_notes) >= 100)
     )
 );

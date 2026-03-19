@@ -3,18 +3,17 @@
 -- HPC generation, document signing, bulk export workflows
 -- ============================================================================
 
--- 1. export_signing_keys — Digital signing key registry
+-- 1. export_signing_keys — Digital signing key registry (created first for FK references)
 CREATE TABLE export_signing_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    key_identifier TEXT NOT NULL UNIQUE,
+    key_ref TEXT NOT NULL,
     provider TEXT NOT NULL DEFAULT 'EMUDHRA',
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'ROTATED', 'REVOKED', 'EXPIRED')),
+    activated_at TIMESTAMPTZ,
     revoked_at TIMESTAMPTZ,
-    revoked_reason TEXT,
-    valid_from TIMESTAMPTZ,
-    valid_until TIMESTAMPTZ,
+    revocation_reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -22,16 +21,16 @@ CREATE TABLE export_signing_keys (
 CREATE TABLE export_template_definitions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    template_code TEXT NOT NULL
-        CHECK (template_code IN (
-            'HPC_FOUNDATIONAL', 'HPC_PREPARATORY', 'HPC_MIDDLE', 'HPC_SECONDARY',
-            'MERKLE_CERTIFICATE', 'CREDIT_CERTIFICATE', 'PORTABILITY_PACKAGE'
-        )),
+    template_code TEXT NOT NULL,
     stage_id UUID REFERENCES academic_stages(id),
     version INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'DRAFT'
         CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
     field_inclusion_policy JSONB NOT NULL DEFAULT '{}',
+    font_size TEXT,
+    descriptor_display TEXT,
+    numeric_scores_visible BOOLEAN,
+    published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -56,19 +55,23 @@ CREATE TRIGGER trg_protect_published_export_template
 CREATE TABLE export_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+    job_type TEXT NOT NULL DEFAULT 'SINGLE_STUDENT'
+        CHECK (job_type IN ('SINGLE_STUDENT', 'BULK_CLASS', 'BULK_SCHOOL', 'BULK_YEAR')),
     template_id UUID NOT NULL REFERENCES export_template_definitions(id),
-    student_id UUID REFERENCES student_profiles(id),
     academic_year_id UUID REFERENCES academic_years(id),
-    batch_id UUID,
-    job_type TEXT NOT NULL DEFAULT 'SINGLE'
-        CHECK (job_type IN ('SINGLE', 'BULK')),
+    student_id UUID REFERENCES student_profiles(id),
+    class_id UUID REFERENCES classes(id),
+    school_id UUID REFERENCES schools(id),
     status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED')),
-    failure_reason TEXT,
-    snapshot_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    total_documents INTEGER NOT NULL DEFAULT 0,
+    completed_documents INTEGER NOT NULL DEFAULT 0,
+    failed_documents INTEGER NOT NULL DEFAULT 0,
     estimated_completion_at TIMESTAMPTZ,
+    failure_reason TEXT,
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
+    queued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -77,13 +80,14 @@ CREATE TABLE export_document_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     export_job_id UUID NOT NULL REFERENCES export_jobs(id),
+    student_id UUID NOT NULL REFERENCES student_profiles(id),
     storage_ref TEXT,
     output_hash TEXT NOT NULL,
     signature_value TEXT,
     signing_key_id UUID REFERENCES export_signing_keys(id),
     is_signed BOOLEAN NOT NULL DEFAULT FALSE,
     file_size_bytes BIGINT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 5. export_access_log — Immutable log of document access events
@@ -93,7 +97,7 @@ CREATE TABLE export_access_log (
     document_id UUID NOT NULL REFERENCES export_document_records(id),
     accessed_by UUID NOT NULL REFERENCES users(id),
     access_type TEXT NOT NULL
-        CHECK (access_type IN ('VIEW', 'DOWNLOAD', 'SHARE', 'VERIFY')),
+        CHECK (access_type IN ('VIEW', 'DOWNLOAD', 'SHARE')),
     accessed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     ip_address INET
 );
@@ -106,9 +110,9 @@ CREATE RULE no_export_access_log_delete AS ON DELETE TO export_access_log DO INS
 CREATE TABLE export_authorizations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    academic_year_id UUID REFERENCES academic_years(id),
+    export_job_id UUID NOT NULL REFERENCES export_jobs(id),
     authorization_type TEXT NOT NULL
-        CHECK (authorization_type IN ('BULK_YEAR_END', 'GOVERNMENT_SUBMISSION', 'SPECIAL_REQUEST')),
+        CHECK (authorization_type IN ('BULK_YEAR_END', 'GOVERNMENT_SUBMISSION')),
     requested_by UUID NOT NULL REFERENCES users(id),
     first_approver_id UUID REFERENCES users(id),
     second_approver_id UUID REFERENCES users(id),
@@ -140,14 +144,11 @@ CREATE TABLE template_state_variants (
 CREATE TABLE bulk_export_archives (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    export_authorization_id UUID NOT NULL REFERENCES export_authorizations(id),
+    export_job_id UUID NOT NULL REFERENCES export_jobs(id),
+    archive_ref TEXT,
     manifest JSONB,
-    total_documents INTEGER,
-    completed_documents INTEGER NOT NULL DEFAULT 0,
-    failed_documents INTEGER NOT NULL DEFAULT 0,
-    archive_storage_ref TEXT,
-    status TEXT NOT NULL DEFAULT 'ASSEMBLING'
-        CHECK (status IN ('ASSEMBLING', 'COMPLETED', 'PARTIAL', 'FAILED')),
+    document_count INTEGER,
+    archive_hash TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

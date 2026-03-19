@@ -7,12 +7,13 @@
 CREATE TABLE credit_frameworks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
+    code TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'DRAFT'
-        CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUPERSEDED')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT unique_framework_code_per_tenant UNIQUE (tenant_id, code)
 );
 
 -- 2. credit_domain_definitions — Domains within a credit framework
@@ -37,11 +38,8 @@ CREATE TABLE credit_policies (
     hours_per_credit DECIMAL NOT NULL,
     min_mastery_threshold DECIMAL DEFAULT 0.50,
     status TEXT NOT NULL DEFAULT 'DRAFT'
-        CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUPERSEDED', 'ARCHIVED')),
+        CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUPERSEDED')),
     published_at TIMESTAMPTZ,
-    effective_from DATE,
-    effective_until DATE,
-    rules JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -67,11 +65,11 @@ CREATE TABLE activity_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
-    description TEXT,
     credit_domain_id UUID NOT NULL REFERENCES credit_domain_definitions(id),
-    notional_hours DECIMAL NOT NULL,
-    evidence_types_required TEXT[] NOT NULL,
-    credit_eligible BOOLEAN NOT NULL DEFAULT TRUE,
+    notional_hours DECIMAL,
+    evidence_types_required TEXT[],
+    credit_linkage_type TEXT NOT NULL DEFAULT 'DIRECT'
+        CHECK (credit_linkage_type IN ('DIRECT', 'COMPETENCY_LINKED', 'EXPERIENTIAL')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -85,24 +83,25 @@ CREATE TABLE student_activity_records (
     academic_year_id UUID REFERENCES academic_years(id),
     hours_claimed DECIMAL,
     hours_verified DECIMAL,
-    verification_status TEXT NOT NULL DEFAULT 'PENDING'
-        CHECK (verification_status IN ('PENDING', 'VERIFIED', 'REJECTED')),
-    verified_by UUID REFERENCES users(id),
-    verified_at TIMESTAMPTZ,
     evidence_record_ids UUID[],
     evidence_triangle_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verified_by UUID REFERENCES users(id),
+    verified_at TIMESTAMPTZ,
+    status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'VERIFIED', 'REJECTED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 6. hour_ledger_entries — Append-only record of credited hours
+-- 6. hour_ledger_entries — Append-only record of verified hours
 CREATE TABLE hour_ledger_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     student_id UUID NOT NULL REFERENCES student_profiles(id),
     activity_record_id UUID NOT NULL REFERENCES student_activity_records(id),
     credit_policy_id UUID NOT NULL REFERENCES credit_policies(id),
-    hours_credited DECIMAL NOT NULL,
-    verified_at TIMESTAMPTZ NOT NULL,
+    hours_verified DECIMAL NOT NULL,
+    domain_code TEXT,
+    academic_year_id UUID REFERENCES academic_years(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -132,6 +131,7 @@ CREATE TABLE credit_ledger_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
     student_id UUID NOT NULL REFERENCES student_profiles(id),
+    competency_id UUID REFERENCES competencies(id),
     credit_domain_id UUID NOT NULL REFERENCES credit_domain_definitions(id),
     credit_policy_id UUID NOT NULL REFERENCES credit_policies(id),
     academic_year_id UUID REFERENCES academic_years(id),
@@ -139,9 +139,9 @@ CREATE TABLE credit_ledger_entries (
     credits_awarded DECIMAL,
     credits_capped BOOLEAN NOT NULL DEFAULT FALSE,
     overflow_credits_lost DECIMAL NOT NULL DEFAULT 0,
-    applied_threshold DECIMAL,
     standard_threshold DECIMAL,
-    overlay_used BOOLEAN NOT NULL DEFAULT FALSE,
+    applied_threshold DECIMAL,
+    overlay_id UUID REFERENCES rubric_overlays(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -153,16 +153,16 @@ CREATE RULE no_credit_ledger_delete AS ON DELETE TO credit_ledger_entries DO INS
 CREATE TABLE credit_ledger_amendment_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-    credit_entry_id UUID NOT NULL REFERENCES credit_ledger_entries(id),
+    ledger_entry_id UUID NOT NULL REFERENCES credit_ledger_entries(id),
     amendment_type TEXT NOT NULL,
     reason TEXT NOT NULL,
     before_state JSONB,
     after_state JSONB,
     requested_by UUID NOT NULL REFERENCES users(id),
-    first_approver_id UUID REFERENCES users(id),
-    second_approver_id UUID REFERENCES users(id),
     status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (status IN ('PENDING', 'FIRST_APPROVED', 'APPROVED', 'REJECTED')),
+    first_approver_id UUID REFERENCES users(id),
+    second_approver_id UUID REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT credit_amendment_dual_approval CHECK (
         first_approver_id IS NULL OR
@@ -187,11 +187,14 @@ CREATE TABLE external_credit_claims (
     platform_name TEXT NOT NULL,
     certificate_ref TEXT,
     digital_signature_valid BOOLEAN,
-    signature_verification_at TIMESTAMPTZ,
-    status TEXT NOT NULL DEFAULT 'PENDING'
-        CHECK (status IN ('PENDING', 'SIGNATURE_VERIFIED', 'SIGNATURE_FAILED', 'APPROVED', 'REJECTED')),
-    reviewed_by UUID REFERENCES users(id),
+    verification_status TEXT NOT NULL DEFAULT 'PENDING_VERIFICATION'
+        CHECK (verification_status IN (
+            'PENDING_VERIFICATION', 'SIGNATURE_VALID', 'SIGNATURE_FAILED',
+            'APPROVED', 'REJECTED'
+        )),
     taxonomy_mapping JSONB,
+    reviewed_by UUID REFERENCES users(id),
+    override_justification TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -202,8 +205,9 @@ CREATE TABLE credit_summaries (
     student_id UUID NOT NULL REFERENCES student_profiles(id),
     academic_year_id UUID REFERENCES academic_years(id),
     total_credits DECIMAL,
-    domain_breakdown JSONB,
+    credits_by_domain JSONB,
     last_computed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT unique_credit_summary UNIQUE (tenant_id, student_id, academic_year_id)
 );
 
@@ -218,10 +222,7 @@ CREATE TABLE credit_computation_jobs (
         CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'SUPERSEDED')),
     priority INTEGER NOT NULL DEFAULT 5,
     retry_count INTEGER NOT NULL DEFAULT 0,
-    max_retries INTEGER NOT NULL DEFAULT 3,
     error_message TEXT,
-    started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ,
     queued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
