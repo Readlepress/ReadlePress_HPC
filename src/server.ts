@@ -17,6 +17,14 @@ import feedbackRoutes from './routes/feedback.routes';
 import interventionRoutes from './routes/intervention.routes';
 import overlayRoutes from './routes/overlay.routes';
 import uiSchemaRoutes from './routes/ui-schema.routes';
+import creditRoutes from './routes/credit.routes';
+import exportRoutes from './routes/export.routes';
+import governanceRoutes from './routes/governance.routes';
+import aiRoutes from './routes/ai.routes';
+import sqaaRoutes from './routes/sqaa.routes';
+import portabilityRoutes from './routes/portability.routes';
+import cpdRoutes from './routes/cpd.routes';
+import communityRoutes from './routes/community.routes';
 
 function getLoggerConfig() {
   try {
@@ -66,6 +74,14 @@ async function buildApp() {
     await v1.register(interventionRoutes);
     await v1.register(overlayRoutes);
     await v1.register(uiSchemaRoutes);
+    await v1.register(creditRoutes);
+    await v1.register(exportRoutes);
+    await v1.register(governanceRoutes);
+    await v1.register(aiRoutes);
+    await v1.register(sqaaRoutes);
+    await v1.register(portabilityRoutes);
+    await v1.register(cpdRoutes);
+    await v1.register(communityRoutes);
   }, { prefix: '/api/v1' });
 
   return app;

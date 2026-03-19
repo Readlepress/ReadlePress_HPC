@@ -571,3 +571,299 @@ ALTER TABLE credit_overlay_links FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON credit_overlay_links;
 CREATE POLICY tenant_isolation ON credit_overlay_links
     USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- ===== Layer 13 — Credit Engine =====
+
+ALTER TABLE credit_ledger_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_ledger_entries FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON credit_ledger_entries;
+CREATE POLICY tenant_isolation ON credit_ledger_entries
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE credit_computation_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_computation_jobs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON credit_computation_jobs;
+CREATE POLICY tenant_isolation ON credit_computation_jobs
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE external_credit_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE external_credit_claims FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON external_credit_claims;
+CREATE POLICY tenant_isolation ON external_credit_claims
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- ===== Layer 14 — Export / Document Generation =====
+
+ALTER TABLE export_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE export_jobs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON export_jobs;
+CREATE POLICY tenant_isolation ON export_jobs
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE export_document_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE export_document_records FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON export_document_records;
+CREATE POLICY tenant_isolation ON export_document_records
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- ===== Layer 15 — Governance / Override =====
+
+ALTER TABLE override_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE override_requests FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON override_requests;
+CREATE POLICY tenant_isolation ON override_requests
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE governance_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE governance_alerts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON governance_alerts;
+CREATE POLICY tenant_isolation ON governance_alerts
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- ===== Layer 16 — AI Generation =====
+
+ALTER TABLE ai_generation_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_generation_log FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON ai_generation_log;
+CREATE POLICY tenant_isolation ON ai_generation_log
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE ai_draft_contents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_draft_contents FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON ai_draft_contents;
+CREATE POLICY tenant_isolation ON ai_draft_contents
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- ===== Layer 17 — Portability =====
+
+ALTER TABLE portability_packages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE portability_packages FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON portability_packages;
+CREATE POLICY tenant_isolation ON portability_packages
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- credential_revocation_list: NO RLS (public table, no tenant_id)
+
+-- ===== Layer 18 — CPD (Continuing Professional Development) =====
+
+ALTER TABLE cpd_hours_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cpd_hours_ledger FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON cpd_hours_ledger;
+CREATE POLICY tenant_isolation ON cpd_hours_ledger
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE cpd_aggregation_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cpd_aggregation_jobs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON cpd_aggregation_jobs;
+CREATE POLICY tenant_isolation ON cpd_aggregation_jobs
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE professional_growth_interventions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE professional_growth_interventions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON professional_growth_interventions;
+CREATE POLICY tenant_isolation ON professional_growth_interventions
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+DROP POLICY IF EXISTS district_admin_block ON professional_growth_interventions;
+DROP POLICY IF EXISTS district_admin_block_pgi ON professional_growth_interventions;
+CREATE POLICY district_admin_block ON professional_growth_interventions
+    AS RESTRICTIVE FOR SELECT
+    USING (
+        current_setting('app.user_role', TRUE) NOT IN ('DISTRICT_ADMIN')
+    );
+
+ALTER TABLE npst_competency_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE npst_competency_assessments FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON npst_competency_assessments;
+CREATE POLICY tenant_isolation ON npst_competency_assessments
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+DROP POLICY IF EXISTS district_admin_block ON npst_competency_assessments;
+DROP POLICY IF EXISTS district_admin_block_npst ON npst_competency_assessments;
+CREATE POLICY district_admin_block ON npst_competency_assessments
+    AS RESTRICTIVE FOR SELECT
+    USING (
+        current_setting('app.user_role', TRUE) NOT IN ('DISTRICT_ADMIN')
+    );
+
+ALTER TABLE peer_observation_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE peer_observation_records FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON peer_observation_records;
+CREATE POLICY tenant_isolation ON peer_observation_records
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+DROP POLICY IF EXISTS district_admin_block ON peer_observation_records;
+CREATE POLICY district_admin_block ON peer_observation_records
+    AS RESTRICTIVE FOR SELECT
+    USING (
+        current_setting('app.user_role', TRUE) NOT IN ('DISTRICT_ADMIN')
+    );
+
+-- mastery_events: additional DISTRICT_ADMIN block (tenant_isolation already in Layer 9)
+DROP POLICY IF EXISTS district_admin_block ON mastery_events;
+CREATE POLICY district_admin_block ON mastery_events
+    AS RESTRICTIVE FOR SELECT
+    USING (
+        current_setting('app.user_role', TRUE) NOT IN ('DISTRICT_ADMIN')
+    );
+
+-- ===== Layer 19 — SQAA Engine =====
+
+ALTER TABLE sqaa_frameworks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_frameworks FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_frameworks;
+CREATE POLICY tenant_isolation ON sqaa_frameworks
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_indicator_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_indicator_definitions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_indicator_definitions;
+CREATE POLICY tenant_isolation ON sqaa_indicator_definitions
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_indicator_values ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_indicator_values FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_indicator_values;
+CREATE POLICY tenant_isolation ON sqaa_indicator_values
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_domain_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_domain_scores FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_domain_scores;
+CREATE POLICY tenant_isolation ON sqaa_domain_scores
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_composite_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_composite_scores FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_composite_scores;
+CREATE POLICY tenant_isolation ON sqaa_composite_scores
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_computation_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_computation_jobs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_computation_jobs;
+CREATE POLICY tenant_isolation ON sqaa_computation_jobs
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_indicator_submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_indicator_submissions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_indicator_submissions;
+CREATE POLICY tenant_isolation ON sqaa_indicator_submissions
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE sqaa_improvement_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sqaa_improvement_plans FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON sqaa_improvement_plans;
+CREATE POLICY tenant_isolation ON sqaa_improvement_plans
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE compliance_checklists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE compliance_checklists FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON compliance_checklists;
+CREATE POLICY tenant_isolation ON compliance_checklists
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- ===== Layer 20 — Community Partnership =====
+
+ALTER TABLE community_partners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_partners FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON community_partners;
+CREATE POLICY tenant_isolation ON community_partners
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE engagement_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE engagement_sessions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON engagement_sessions;
+CREATE POLICY tenant_isolation ON engagement_sessions
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE engagement_computation_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE engagement_computation_jobs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON engagement_computation_jobs;
+CREATE POLICY tenant_isolation ON engagement_computation_jobs
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+ALTER TABLE partner_safeguarding_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE partner_safeguarding_log FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON partner_safeguarding_log;
+CREATE POLICY tenant_isolation ON partner_safeguarding_log
+    USING (tenant_id = current_setting('app.tenant_id', TRUE)::uuid);
+
+-- =========================================================================
+-- Additional Layer 13-23 tables (appended)
+-- Uses DO $$ blocks with existence checks for tables that may not yet exist
+-- =========================================================================
+
+DO $$
+DECLARE
+    t TEXT;
+    tenant_tables TEXT[] := ARRAY[
+        -- Layer 13 additional
+        'credit_frameworks', 'credit_domain_definitions', 'credit_policies',
+        'activity_templates', 'student_activity_records', 'hour_ledger_entries',
+        'credit_ledger_amendment_log', 'credit_summaries',
+        -- Layer 14 additional
+        'export_signing_keys', 'export_template_definitions', 'export_access_log',
+        'export_authorizations', 'template_state_variants', 'bulk_export_archives',
+        -- Layer 15 additional
+        'override_application_log', 'permission_snapshots', 'audit_chain_verification_runs',
+        'governance_policy_registry', 'compliance_reconstruction_requests',
+        'data_retention_execution_log',
+        -- Layer 16 additional
+        'prompt_templates', 'ai_generation_subject_links', 'ai_draft_contents',
+        'bias_monitoring_runs', 'bias_monitoring_policy', 'ai_consent_checks',
+        -- Layer 17
+        'governance_nodes', 'policy_packs', 'effective_policy_cache',
+        'district_oversight_assignments', 'district_compliance_dashboard_cache',
+        'protected_evidence_access_requests', 'inter_district_transfer_records',
+        'state_compliance_directives', 'school_directive_compliance',
+        'policy_pack_deployment_log',
+        -- Layer 18
+        'tenant_sla_assignments', 'sla_monitoring_records', 'onboarding_programmes',
+        'tenant_onboarding_records', 'user_training_records', 'support_tickets',
+        'exit_procedure_requests', 'audit_access_grants',
+        -- Layer 20 additional
+        'policy_directives', 'directive_conflicts', 'compliance_risk_radar_cache',
+        'directive_distribution_log', 'outbound_reporting_endpoints',
+        'outbound_submission_records', 'compliance_risk_computation_jobs',
+        'compliance_notification_log',
+        -- Layer 21 additional
+        'teacher_professional_profiles', 'cpd_provider_registry',
+        'cpd_activity_records', 'peer_observation_cycles',
+        -- Layer 22 additional
+        'portability_package_sections', 'import_requests',
+        'taxonomy_bridge_mappings_applied', 'import_record_provenance',
+        'portability_consent_records',
+        -- Layer 23 additional
+        'partner_vetting_log', 'engagement_activity_templates',
+        'session_student_participants', 'alumni_profiles',
+        'alumni_engagement_records', 'engagement_ledger_aggregates'
+    ];
+BEGIN
+    FOREACH t IN ARRAY tenant_tables LOOP
+        IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t) THEN
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+            EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+            EXECUTE format(
+                'CREATE POLICY tenant_isolation ON %I USING (tenant_id = current_setting(''app.tenant_id'', TRUE)::uuid)',
+                t
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+-- Layer 21: teacher_professional_profiles DISTRICT_ADMIN / STATE_ADMIN block
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'teacher_professional_profiles') THEN
+        DROP POLICY IF EXISTS district_admin_block ON teacher_professional_profiles;
+        CREATE POLICY district_admin_block ON teacher_professional_profiles
+            AS RESTRICTIVE FOR SELECT
+            USING (
+                current_setting('app.user_role', TRUE) NOT IN ('DISTRICT_ADMIN', 'STATE_ADMIN')
+            );
+    END IF;
+END $$;
+
+-- credential_revocation_list: NO RLS (public table, no tenant_id)
