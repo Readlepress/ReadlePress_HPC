@@ -58,8 +58,12 @@ const app = Fastify({ logger: getLoggerConfig() });
 async function buildApp() {
   await app.register(fastifyCors, { origin: true });
 
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret && process.env.NODE_ENV !== 'development') {
+    throw new Error('JWT_SECRET environment variable is required in non-development environments');
+  }
   await app.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET || 'dev_jwt_secret_256bit_minimum_key_for_development_only',
+    secret: jwtSecret || 'dev_jwt_secret_256bit_minimum_key_for_development_only',
   });
 
   await app.register(fastifyRateLimit, {
