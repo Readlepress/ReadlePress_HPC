@@ -74,37 +74,4 @@ export default async function overlayRoutes(app: FastifyInstance) {
     }, user.tenantId, user.userId, user.role);
   });
 
-  app.get('/students/:id/assessment-context', { preHandler: [authenticate] }, async (request) => {
-    const { id } = request.params as { id: string };
-    const user = getUser(request);
-    const { includeOverlays, includeDisability } = request.query as {
-      includeOverlays?: string;
-      includeDisability?: string;
-    };
-    return withTransaction(async (client) => {
-      const student = await client.query(
-        `SELECT s.student_id, s.full_name, se.class_id, c.grade_level, c.stage_code
-         FROM students s
-         LEFT JOIN student_enrolments se ON se.student_id = s.student_id AND se.is_current = true
-         LEFT JOIN classes c ON c.class_id = se.class_id
-         WHERE s.student_id = $1`,
-        [id]
-      );
-      const result: Record<string, unknown> = { student: student.rows[0] || null };
-
-      if (includeOverlays === 'true') {
-        const overlays = await client.query(
-          `SELECT * FROM overlays WHERE student_id = $1 AND status = 'ACTIVE'`, [id]
-        );
-        result.activeOverlays = overlays.rows;
-      }
-      if (includeDisability === 'true') {
-        const profiles = await client.query(
-          `SELECT * FROM disability_profiles WHERE student_id = $1 AND status = 'ACTIVE'`, [id]
-        );
-        result.disabilityProfiles = profiles.rows;
-      }
-      return result;
-    }, user.tenantId, user.userId, user.role);
-  });
 }
