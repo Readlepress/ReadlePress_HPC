@@ -1,0 +1,8 @@
+scikit-learn>=1.3.0
+pandas>=2.1.0
+psycopg2-binary>=2.9.9
+numpy>=1.24.0
+joblib>=1.3.0
+flask>=3.0.0
+python-dotenv>=1.0.0
+flwr>=1.5.0  # flower - federated learning framework (optional)

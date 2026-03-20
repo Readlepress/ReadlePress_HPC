@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
+import fastifyWebsocket from '@fastify/websocket';
 
 import authRoutes from './routes/auth.routes';
 import consentRoutes from './routes/consent.routes';
@@ -29,6 +30,13 @@ import complianceRoutes from './routes/compliance.routes';
 import portabilityRoutes from './routes/portability.routes';
 import cpdRoutes from './routes/cpd.routes';
 import communityRoutes from './routes/community.routes';
+import blockchainRoutes from './routes/blockchain.routes';
+import realtimeRoutes from './routes/realtime.routes';
+import nlpRoutes from './routes/nlp.routes';
+import visionRoutes from './routes/vision.routes';
+import simulationRoutes from './routes/simulation.routes';
+import autoSqaaRoutes from './routes/auto-sqaa.routes';
+import recommendationRoutes from './routes/recommendation.routes';
 
 function getLoggerConfig() {
   try {
@@ -58,6 +66,8 @@ async function buildApp() {
     max: 100,
     timeWindow: '1 minute',
   });
+
+  await app.register(fastifyWebsocket);
 
   // Health check
   app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -90,6 +100,13 @@ async function buildApp() {
     await v1.register(portabilityRoutes);
     await v1.register(cpdRoutes);
     await v1.register(communityRoutes);
+    await v1.register(nlpRoutes);
+    await v1.register(visionRoutes);
+    await v1.register(simulationRoutes);
+    await v1.register(autoSqaaRoutes);
+    await v1.register(recommendationRoutes);
+    await v1.register(blockchainRoutes);
+    await v1.register(realtimeRoutes);
   }, { prefix: '/api/v1' });
 
   return app;

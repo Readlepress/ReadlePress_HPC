@@ -1,0 +1,168 @@
+{
+  "domains": {
+    "COG": {
+      "name": "Cognitive Development",
+      "descriptor_levels": {
+        "BEGINNING": {
+          "template": "{student_name} is beginning to explore foundational cognitive concepts. The student is developing initial awareness of problem-solving approaches and shows emerging interest in logical reasoning tasks. Scaffolded support is recommended to build confidence in analytical thinking.",
+          "key_indicators": [
+            "Attempts basic classification tasks with guidance",
+            "Recognises simple patterns when pointed out",
+            "Follows single-step instructions for cognitive activities",
+            "Shows curiosity about cause-and-effect relationships"
+          ]
+        },
+        "DEVELOPING": {
+          "template": "{student_name} is developing cognitive skills and shows growing ability to think through problems independently. The student can identify patterns in structured activities and is beginning to apply learned strategies to new situations with some teacher guidance.",
+          "key_indicators": [
+            "Applies basic problem-solving strategies with minimal prompting",
+            "Identifies patterns across two or more contexts",
+            "Begins to explain reasoning behind answers",
+            "Transfers learned concepts to similar tasks"
+          ]
+        },
+        "PROFICIENT": {
+          "template": "{student_name} demonstrates proficient cognitive skills, consistently applying analytical thinking and problem-solving strategies across subjects. The student independently identifies relationships between concepts and can articulate reasoning clearly to peers and teachers.",
+          "key_indicators": [
+            "Independently solves multi-step problems",
+            "Makes connections between concepts across domains",
+            "Explains reasoning clearly using evidence",
+            "Self-corrects errors through logical analysis"
+          ]
+        },
+        "ADVANCED": {
+          "template": "{student_name} exhibits advanced cognitive abilities, demonstrating creative and critical thinking beyond grade-level expectations. The student initiates novel problem-solving approaches, synthesises information from multiple sources, and can mentor peers in analytical reasoning.",
+          "key_indicators": [
+            "Creates original solutions to complex problems",
+            "Synthesises information across multiple domains",
+            "Evaluates and critiques reasoning of others constructively",
+            "Applies metacognitive strategies independently"
+          ]
+        }
+      }
+    },
+    "AES": {
+      "name": "Aesthetic and Cultural Development",
+      "descriptor_levels": {
+        "BEGINNING": {
+          "template": "{student_name} is beginning to engage with aesthetic and creative activities. The student shows initial interest in arts, music, or cultural expressions and participates in guided creative tasks. Exposure to diverse artistic forms will support further development.",
+          "key_indicators": [
+            "Participates in structured creative activities with encouragement",
+            "Explores different art materials and tools",
+            "Responds to music and visual art with simple observations",
+            "Shows awareness of local cultural practices"
+          ]
+        },
+        "DEVELOPING": {
+          "template": "{student_name} is developing aesthetic sensibility and shows increasing confidence in creative expression. The student experiments with different artistic forms and can describe what they observe in artworks or performances with growing vocabulary.",
+          "key_indicators": [
+            "Experiments with colour, form, and texture purposefully",
+            "Describes artistic choices in own and others' work",
+            "Participates actively in cultural and performance activities",
+            "Connects artistic themes to personal experience"
+          ]
+        },
+        "PROFICIENT": {
+          "template": "{student_name} demonstrates proficient aesthetic understanding and creative expression. The student produces thoughtful creative work that reflects personal perspective, appreciates diverse cultural traditions, and can articulate the emotional and cultural significance of artistic works.",
+          "key_indicators": [
+            "Creates original artwork reflecting personal vision",
+            "Analyses artistic works using appropriate terminology",
+            "Appreciates and respects diverse cultural expressions",
+            "Integrates aesthetic awareness into cross-curricular projects"
+          ]
+        },
+        "ADVANCED": {
+          "template": "{student_name} exhibits advanced aesthetic and cultural awareness, producing creative work of exceptional depth and originality. The student critically engages with diverse art forms, leads collaborative creative projects, and demonstrates mature understanding of cultural contexts and artistic traditions.",
+          "key_indicators": [
+            "Produces sophisticated creative works demonstrating technical skill",
+            "Critically evaluates artistic works across cultural traditions",
+            "Leads and facilitates collaborative creative projects",
+            "Articulates complex relationships between art, culture, and society"
+          ]
+        }
+      }
+    },
+    "SOC": {
+      "name": "Social-Emotional Development",
+      "descriptor_levels": {
+        "BEGINNING": {
+          "template": "{student_name} is beginning to develop social-emotional skills in the classroom setting. The student is learning to identify their own emotions and is developing initial strategies for interacting positively with peers. Supportive social environments will help build these foundational skills.",
+          "key_indicators": [
+            "Identifies basic emotions in self with teacher support",
+            "Participates in group activities when invited",
+            "Follows classroom social norms with reminders",
+            "Shows empathy in familiar situations"
+          ]
+        },
+        "DEVELOPING": {
+          "template": "{student_name} is developing social-emotional competence, showing improved ability to manage emotions and navigate peer relationships. The student increasingly takes turns, shares resources, and resolves minor disagreements with some adult guidance.",
+          "key_indicators": [
+            "Manages frustration using taught strategies most of the time",
+            "Initiates positive interactions with peers",
+            "Takes turns and shares during group work",
+            "Expresses needs and feelings using appropriate language"
+          ]
+        },
+        "PROFICIENT": {
+          "template": "{student_name} demonstrates proficient social-emotional skills, consistently showing empathy, self-regulation, and positive leadership in group settings. The student resolves conflicts independently, supports peers in difficulty, and contributes meaningfully to collaborative work.",
+          "key_indicators": [
+            "Resolves peer conflicts through negotiation and compromise",
+            "Demonstrates empathy and offers support to distressed peers",
+            "Self-regulates emotions across various classroom contexts",
+            "Takes on leadership roles in collaborative activities"
+          ]
+        },
+        "ADVANCED": {
+          "template": "{student_name} exhibits advanced social-emotional maturity, serving as a positive role model for peers. The student demonstrates exceptional empathy, facilitates group harmony, and shows deep understanding of diverse perspectives. They proactively create inclusive environments and support others' emotional wellbeing.",
+          "key_indicators": [
+            "Mediates complex social situations among peers effectively",
+            "Demonstrates nuanced understanding of diverse perspectives",
+            "Proactively creates inclusive and supportive environments",
+            "Mentors peers in emotional regulation and social skills"
+          ]
+        }
+      }
+    },
+    "PHY": {
+      "name": "Physical Development and Wellness",
+      "descriptor_levels": {
+        "BEGINNING": {
+          "template": "{student_name} is beginning to develop fundamental physical skills and health awareness. The student participates in basic motor activities with guidance and is learning foundational concepts about nutrition, hygiene, and body awareness. Structured physical play will support ongoing development.",
+          "key_indicators": [
+            "Performs basic gross motor movements with support",
+            "Participates in physical activities with encouragement",
+            "Shows awareness of basic hygiene practices",
+            "Developing hand-eye coordination through guided activities"
+          ]
+        },
+        "DEVELOPING": {
+          "template": "{student_name} is developing physical competence and shows growing confidence in motor activities. The student demonstrates improving coordination, actively participates in physical education, and applies basic health and hygiene knowledge in daily routines.",
+          "key_indicators": [
+            "Demonstrates improved balance and coordination",
+            "Participates actively and enthusiastically in physical activities",
+            "Applies hygiene and nutrition knowledge independently",
+            "Developing fine motor skills for writing and craft activities"
+          ]
+        },
+        "PROFICIENT": {
+          "template": "{student_name} demonstrates proficient physical development and health awareness. The student shows well-developed motor skills, maintains an active lifestyle, understands the importance of physical fitness, and consistently applies health and safety knowledge in school and daily life.",
+          "key_indicators": [
+            "Demonstrates age-appropriate strength, flexibility, and endurance",
+            "Applies rules and strategies in team sports and games",
+            "Makes informed choices about nutrition and personal health",
+            "Demonstrates proficient fine motor control in academic tasks"
+          ]
+        },
+        "ADVANCED": {
+          "template": "{student_name} exhibits advanced physical development and health literacy, performing complex motor tasks with confidence and skill. The student leads physical activities, demonstrates sportsmanship, promotes healthy habits among peers, and shows exceptional body awareness and coordination.",
+          "key_indicators": [
+            "Excels in complex physical activities requiring multi-skill coordination",
+            "Leads warm-ups and physical activities for peer groups",
+            "Advocates for healthy lifestyle choices among peers",
+            "Demonstrates exceptional sportsmanship and fair play"
+          ]
+        }
+      }
+    }
+  }
+}

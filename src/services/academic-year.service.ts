@@ -1,6 +1,7 @@
 import { query, withTransaction } from '../config/database';
 import { insertAuditLog } from './audit.service';
 import { requestTimestamp } from './tsa.service';
+import { anchorMerkleRoot } from './blockchain.service';
 
 export async function listAcademicYears(tenantId: string, userId: string, userRole: string, schoolId?: string) {
   return withTransaction(async (client) => {
@@ -112,6 +113,16 @@ export async function initiateYearClose(
         `UPDATE year_snapshots SET external_anchor_ref = $1 WHERE id = $2`,
         [externalAnchorRef, snapshotResult.rows[0].id]
       );
+    }
+
+    try {
+      const blockchainResult = await anchorMerkleRoot(tenantId, snapshotResult.rows[0].id, merkleResult.root_hash);
+      await client.query(
+        `UPDATE year_snapshots SET blockchain_tx_hash = $1, blockchain_block_number = $2, blockchain_chain = $3 WHERE id = $4`,
+        [blockchainResult.transactionHash, blockchainResult.blockNumber, blockchainResult.chainName, snapshotResult.rows[0].id]
+      );
+    } catch (err) {
+      console.warn('Blockchain anchoring failed (non-fatal):', err);
     }
 
     await client.query(
